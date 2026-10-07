@@ -10,7 +10,9 @@ fi
 
 mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views \
          storage/logs storage/app/public bootstrap/cache
-chown -R www-data:www-data storage bootstrap/cache .env
+# Read-only mounts (e.g. the Firebase key) are skipped.
+find storage bootstrap/cache -not -path 'storage/app/firebase*' -exec chown www-data:www-data {} + 2>/dev/null || true
+chown www-data:www-data .env 2>/dev/null || true
 
 echo "Waiting for database..."
 i=0
