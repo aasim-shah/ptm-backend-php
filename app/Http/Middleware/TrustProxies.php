@@ -25,4 +25,17 @@ class TrustProxies extends Middleware
         Request::HEADER_X_FORWARDED_PORT |
         Request::HEADER_X_FORWARDED_PROTO |
         Request::HEADER_X_FORWARDED_AWS_ELB;
+
+    /**
+     * Proxies come from TRUSTED_PROXIES: "*" (behind a reverse proxy that is the
+     * only way in, e.g. Caddy on the same host) or a comma-separated IP list.
+     */
+    protected function proxies()
+    {
+        $value = config('environment.TRUSTED_PROXIES');
+        if (!$value) {
+            return $this->proxies;
+        }
+        return $value === '*' ? '*' : array_map('trim', explode(',', $value));
+    }
 }

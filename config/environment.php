@@ -54,4 +54,5 @@ return [
     'TRAIL' => env('TRAIL'),
     'TRAIL_CALL_COUNT' => env('TRAIL_CALL_COUNT'),
     'TRAIL_DAYS' => env('TRAIL_DAYS'),
+    'TRUSTED_PROXIES' => env('TRUSTED_PROXIES'),
 ];

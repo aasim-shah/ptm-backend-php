@@ -1,0 +1,57 @@
+# Self-contained production stack: app (PHP 8.2 + Apache) and its own MySQL.
+# The app listens only on 127.0.0.1:${APP_PORT:-8090}; put a reverse proxy
+# (Caddy/Nginx) with TLS in front of it.
+#
+#   cp .env.example .env.production   # fill in values; DB_HOST=db
+#   echo "MYSQL_ROOT_PASSWORD=..." > .env.compose
+#   docker compose -f docker-compose.prod.yml --env-file .env.compose up -d --build
+
+name: ptm
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ptm-backend:latest
+    container_name: ptm-app
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:${APP_PORT:-8090}:80"
+    environment:
+      DB_HOST_CHECK: db
+      DB_USER_CHECK: ${DB_USERNAME}
+      DB_PASS_CHECK: ${DB_PASSWORD}
+    volumes:
+      - ./.env.production:/var/www/html/.env
+      - ptm-storage:/var/www/html/storage/app
+      - ptm-logs:/var/www/html/storage/logs
+      - ./secrets/firebase-service-account.json:/var/www/html/storage/app/firebase/service-account.json:ro
+    networks:
+      - ptm
+
+  db:
+    image: mysql:8.0
+    container_name: ptm-mysql
+    restart: unless-stopped
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--innodb-buffer-pool-size=256M"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ptm-mysql:/var/lib/mysql
+    networks:
+      - ptm
+
+volumes:
+  ptm-storage:
+  ptm-logs:
+  ptm-mysql:
+
+networks:
+  ptm:
+    name: ptm-network

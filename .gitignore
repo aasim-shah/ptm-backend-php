@@ -49,3 +49,4 @@ Homestead.json
 
 # Release build output
 /build/
+/secrets/
