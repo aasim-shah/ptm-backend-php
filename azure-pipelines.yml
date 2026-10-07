@@ -1,0 +1,51 @@
+trigger:
+  branches:
+    include:
+      - development
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  appDir: '/home/mwuk71da1fu2/public_html/dev.schoolsnow.parentteachermobile.com'
+
+steps:
+  - task: NodeTool@0
+    displayName: 'Use Node 18'
+    inputs:
+      versionSpec: '18.x'
+
+  - script: |
+      php -v
+      composer --version
+    displayName: 'Show PHP and Composer versions'
+
+  # Builds assets, installs PHP deps without dev packages, and packages only
+  # the files the server needs (see scripts/release-exclude.txt).
+  - script: bash scripts/build-release.sh
+    displayName: 'Build release package'
+
+  - task: FtpUpload@2
+    displayName: 'Upload release via FTP'
+    inputs:
+      credentialsOption: 'serviceEndpoint'
+      serverEndpoint: 'ftp-test'
+      rootDirectory: '$(Build.SourcesDirectory)/build'
+      filePatterns: 'release.zip'
+      remoteDirectory: 'home/mwuk71da1fu2/public_html/'
+
+  # The server keeps its own .env and storage/app/firebase/service-account.json;
+  # neither is in the zip, so extracting over the app directory leaves them intact.
+  # The domain's document root must be $(appDir)/public.
+  - task: SSH@0
+    displayName: 'Extract release and run deploy script'
+    inputs:
+      sshEndpoint: 'ssh-test'
+      runOptions: 'inline'
+      inline: |
+        set -e
+        cd /home/mwuk71da1fu2/public_html/
+        unzip -oq release.zip -d $(appDir)
+        rm release.zip
+        cd $(appDir)
+        bash scripts/deploy.sh

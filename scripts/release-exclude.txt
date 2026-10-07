@@ -1,0 +1,59 @@
+# Paths excluded from the production release (rsync --exclude-from syntax).
+
+# Version control, tooling, docs
+/.git/
+/.github/
+/.idea/
+/.vscode/
+/build/
+/docs/
+/tests/
+/scripts/cleanup-unused.sh
+/phpunit.xml
+/azure-pipelines.yml
+/README.md
+.DS_Store
+
+# Dependencies are installed fresh for the release
+/node_modules/
+/vendor/
+
+# Secrets and environment files: configure these on the server only
+/.env
+/.env.*
+*firebase-adminsdk*.json
+/storage/app/firebase/
+
+# Runtime data and logs
+/storage/logs/*
+/storage/debugbar/
+/storage/app/excel/
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/bootstrap/cache/*.php
+/public/storage
+/public/hot
+error_log
+
+# Unused leftovers (see scripts/cleanup-unused.sh)
+/index.php
+/server.php
+/test
+/test.php
+/favicon.ico
+/robots.txt
+/nuxt.config.js
+/vite.config.js
+/cmd.sh
+/database.rules.json
+/assets/
+/public/vendor/wizard-installer/
+/public/js/node_modules_agora-rtc-sdk-ng_AgoraRTC_N-production_js.js
+/resources/views/vendor/installer/
+/resources/views/index.html
+
+# Source maps
+/public/js/*.map
+/public/css/*.map
+/.phpunit.result.cache

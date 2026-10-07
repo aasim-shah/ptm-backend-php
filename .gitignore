@@ -1,0 +1,51 @@
+# Dependencies
+/vendor/
+/node_modules/
+
+# Environment and secrets (never commit)
+.env
+.env.*
+!.env.example
+/storage/app/firebase/
+*firebase-adminsdk*.json
+auth.json
+
+# Laravel runtime
+/storage/*.key
+/storage/app/*
+!/storage/app/public/
+/storage/app/public/*
+!/storage/app/public/.gitignore
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/framework/testing/*
+/storage/logs/*
+/storage/debugbar/
+/bootstrap/cache/*.php
+/public/storage
+/public/hot
+error_log
+
+# Build output (built on deploy with `npm run prod`)
+/public/js/app.js
+/public/js/*.LICENSE.txt
+/public/js/*.map
+/public/css/*.map
+/public/js/node_modules_*.js
+/public/css/app.css
+/public/mix-manifest.json
+
+# Tooling
+.phpunit.result.cache
+npm-debug.log
+yarn-error.log
+/.idea
+/.vscode
+.DS_Store
+Homestead.yaml
+Homestead.json
+/.vagrant
+
+# Release build output
+/build/

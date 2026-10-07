@@ -1,0 +1,16 @@
+.status-1 {
+    background-color: greenyellow !important;
+    color: rgba(24, 24, 24, 0.53);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    text-align: center;
+}
+.status-0 {
+    background-color: greenyellow;
+    color: rgba(24, 24, 24, 0.53);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    text-align: center;
+}
