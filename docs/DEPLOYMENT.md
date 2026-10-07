@@ -88,3 +88,38 @@ Then log in to the admin panel as a Principal and open Dashboard, Classes, Calen
 | `SANDBOX` | `false` | `true` makes PayPal use the sandbox credentials. |
 
 Admin pages that edit `.env` (email, fees configuration) rebuild the config cache automatically after saving.
+
+## 7. VPS deployment (Docker): current production setup
+
+The app runs on the VPS `2.25.103.51` as its own Docker Compose stack. It shares the host with other services (Postiz/Temporal in Docker, Caddy on ports 80/443) and does not touch them.
+
+| Item | Value |
+|---|---|
+| Code | `/root/ptm-backend` (git clone of this repo) |
+| Stack | `docker-compose.prod.yml`: `ptm-app` (PHP 8.2 + Apache) and `ptm-mysql` (MySQL 8, private network `ptm-network`) |
+| App port | `127.0.0.1:8090` (not exposed publicly) |
+| Public access | Caddy block `http://2.25.103.51` in `/etc/caddy/Caddyfile` → `127.0.0.1:8090` (backup: `/etc/caddy/Caddyfile.bak-2026-10-07`) |
+| Secrets (root only) | `.env.production` (mounted as the app's `.env`), `.env.compose` (DB passwords for compose), `secrets/firebase-service-account.json`, `secrets/admin-credentials.txt` |
+| Data | Docker volumes `ptm_ptm-mysql` (database), `ptm_ptm-storage` (uploads), `ptm_ptm-logs` |
+
+**Update to the latest code** (about 2 minutes, a few seconds of downtime while the container restarts):
+
+```bash
+cd /root/ptm-backend
+git pull origin main
+WITH_GRPC=0 docker compose -f docker-compose.prod.yml --env-file .env.compose build
+docker compose -f docker-compose.prod.yml --env-file .env.compose up -d
+```
+The container runs migrations and rebuilds the caches on every start.
+
+**Firestore chat** needs the `grpc` extension. The current image is built with `WITH_GRPC=0` because compiling grpc takes over an hour on this 2-CPU server. To enable chat, run the same build with `WITH_GRPC=1` (it keeps the running app up while it compiles), then run `up -d`.
+
+**Useful commands**
+```bash
+docker logs -f ptm-app                                  # app + Apache log
+docker exec -u www-data ptm-app php artisan tinker      # console
+docker exec ptm-app tail -f storage/logs/laravel-$(date +%F).log
+docker exec ptm-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" ptm' > ptm-$(date +%F).sql   # backup
+```
+
+**Moving to a domain with HTTPS:** point the domain's DNS at the server, then in the Caddyfile replace `http://2.25.103.51` with the domain name (Caddy issues the certificate automatically). Set `APP_URL=https://<domain>` in `.env.production`, run `caddy validate --config /etc/caddy/Caddyfile` and `systemctl reload caddy`, then restart the app with `up -d`.
