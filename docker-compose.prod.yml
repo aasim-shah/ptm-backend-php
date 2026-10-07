@@ -13,6 +13,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        WITH_GRPC: ${WITH_GRPC:-1}
     image: ptm-backend:latest
     container_name: ptm-app
     restart: unless-stopped

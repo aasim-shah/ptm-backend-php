@@ -24,8 +24,11 @@ FROM php:8.2-apache
 COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
 # grpc is required by google/cloud-firestore (chat). It compiles from source, so the first build is slow.
 # One compile job keeps a CPU free for other services on a shared host.
+# Build with --build-arg WITH_GRPC=0 for a fast image without chat support.
 ARG IPE_PROCESSOR_COUNT=1
-RUN IPE_PROCESSOR_COUNT=${IPE_PROCESSOR_COUNT} install-php-extensions pdo_mysql mysqli gd zip intl bcmath exif opcache pcntl grpc \
+ARG WITH_GRPC=1
+RUN IPE_PROCESSOR_COUNT=${IPE_PROCESSOR_COUNT} install-php-extensions pdo_mysql mysqli gd zip intl bcmath exif opcache pcntl \
+    && if [ "$WITH_GRPC" = "1" ]; then IPE_PROCESSOR_COUNT=${IPE_PROCESSOR_COUNT} install-php-extensions grpc; fi \
     && a2enmod rewrite headers \
     && sed -ri 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf \
     && printf '<Directory /var/www/html/public>\n    AllowOverride All\n</Directory>\nServerTokens Prod\nServerSignature Off\n' > /etc/apache2/conf-enabled/app.conf \
