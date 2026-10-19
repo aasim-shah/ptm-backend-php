@@ -63,6 +63,12 @@
 
         @hasrole(['Super Admin','Principal'])
         <li class="nav-item">
+            <a class="nav-link" href="{{ route('role-requests.index') }}"> <span
+                        class="menu-title">Role Requests</span> <i class="fa fa-user-plus menu-icon"></i> </a>
+        </li>
+        @endrole
+        @hasrole(['Super Admin','Principal'])
+        <li class="nav-item">
             <a class="nav-link" href="{{ route('push-notifications') }}"> <span
                         class="menu-title">Push Notifications</span> <i class="fa fa-bell menu-icon"></i> </a>
         </li>

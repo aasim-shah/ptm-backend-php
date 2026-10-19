@@ -11,6 +11,7 @@ use App\Models\ClassSchool;
 use App\Models\ClassSection;
 use App\Models\ClassSubject;
 use App\Models\Country;
+use App\Models\District;
 use App\Models\MainMeeting;
 use App\Models\Mediums;
 use App\Models\Meetings;
@@ -28,6 +29,7 @@ use App\Models\Subject;
 use App\Models\SubjectTeacher;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Models\UserRole;
 use App\Models\UserSchools;
 use App\Models\UserSubscription;
 use App\Services\NotificationSender;
@@ -459,13 +461,22 @@ class ApiController extends Controller
 
         $user = Auth::user();
         $user_id = $user->id;
-        $user_type = $user->type;
-        $meetings = MainMeeting::whereHas('meeting_details',function ($query) use ($user_id,$type,$date,$status,$user,$user_type){
+        // Parent path vs institution path (teacher, staff, admins all use the teacher slot).
+        $actingRole = Access::role($user);
+        $user_type = $actingRole == 'parent' ? 'parent' : ($actingRole == 'principal' ? 'Principal' : 'teacher');
+        $hasContext = (bool) Access::context();
+        $meetings = MainMeeting::whereHas('meeting_details',function ($query) use ($user_id,$type,$date,$status,$user,$user_type,$hasContext){
             $query->select('id', 'title', 'status', 'user_id', 'meeting_created_user_type', 'teacher_id', 'parent_id', 'meeting_date',
                 'meeting_time', 'meeting_end_time', 'description', 'student_id', 'meeting_hash');
-            $query->where(function ($query) use ($user_id){
-                $query->where('parent_id', $user_id);
-                $query->orWhere('teacher_id', $user_id);
+            $query->where(function ($query) use ($user_id, $user_type, $hasContext){
+                // With a role context only that role's side of the meeting counts, so a
+                // parent who is also a teacher sees the meetings of the active role only.
+                if (!$hasContext || $user_type == 'parent') {
+                    $query->where('parent_id', $user_id);
+                }
+                if (!$hasContext || $user_type == 'teacher') {
+                    $query->orWhere('teacher_id', $user_id);
+                }
             });
             $query->where(function ($query) use ($status, $date, $type, $user,$user_type) {
                 if ($status) {
@@ -573,6 +584,18 @@ class ApiController extends Controller
             }
 
             $meeting = Meetings::where('id',$request->meeting_id)->first();
+            if (!$meeting) {
+                return response()->json([
+                    'status' => 400,
+                    'message' => "Meeting not found.",
+                ], 400);
+            }
+            // Only an invitee can accept or reject: the parent slot, or the institution slot
+            // (teacher_id, also used for staff and admins) / principal_id.
+            $slot = Access::actsAsParent($user) ? [$meeting->parent_id] : [$meeting->teacher_id, $meeting->principal_id];
+            if (!in_array((int) $user->id, array_map('intval', array_filter($slot)), true)) {
+                return Access::forbidden();
+            }
             if ($meeting->user_id == $user->id) {
                 return response()->json([
                     'status' => 400,
@@ -923,11 +946,13 @@ class ApiController extends Controller
                 ], 401);
             }
 
+            // Staff and admin contexts create meetings through the teacher (institution) slot.
+            $actingRole = Access::role($user);
             $meeting_created_user_type = "teacher";
-            if ($user->type == 'parent') {
+            if ($actingRole == 'parent') {
                 $meeting_created_user_type = 'parent';
             }
-            if ($user->type == 'Principal') {
+            if ($actingRole == 'principal') {
                 $meeting_created_user_type = 'Principal';
             }
 
@@ -935,8 +960,8 @@ class ApiController extends Controller
             $principal_id = $request->is_principal;
             if ($request->is_principal) {
                 $userSchool = UserSchools::where('user_id', $user->id)->first();
-                $school = Schools::where('id', $userSchool->id)->first();
-                if (!$school->principal_id) {
+                $school = $userSchool ? Schools::where('id', $userSchool->school_id)->first() : null;
+                if (!$school || !$school->principal_id) {
                     return response()->json([
                         'status' => 400,
                         'message' => "There is no principal associated with your school",
@@ -945,7 +970,7 @@ class ApiController extends Controller
                 $principal_id = $school->principal_id;
             }
 
-            if ($request->student_parent_ids && $user->type != 'teacher') {
+            if ($request->student_parent_ids && $actingRole == 'parent') {
                 $response = array(
                     'error' => true,
                     'message' => trans('no_permission_message'),
@@ -954,7 +979,7 @@ class ApiController extends Controller
                 );
                 return response()->json($response,400);
             }
-            if ($request->teacher_id && $user->type != 'parent') {
+            if ($request->teacher_id && $actingRole != 'parent') {
                 $response = array(
                     'error' => true,
                     'message' => trans('no_permission_message'),
@@ -963,7 +988,7 @@ class ApiController extends Controller
                 );
                 return response()->json($response,400);
             }
-            $student_parent_ids = $request->student_parent_ids;
+            $student_parent_ids = $request->student_parent_ids ?? [];
             if (sizeof($student_parent_ids) == 0) {
                 $student_parent_ids[0]['parent_id'] = $user->id;
                 $student_parent_ids[0]['student_id'] = null;
@@ -973,7 +998,7 @@ class ApiController extends Controller
                 $request->teacher_id = $user->id;
             }
 
-            if($user->type == 'teacher' && $isActive->call_count <= sizeof($student_parent_ids)){
+            if(in_array($actingRole, UserRole::INSTITUTION_ROLES, true) && $isActive->call_count <= sizeof($student_parent_ids)){
                 $response = array(
                     'error' => true,
                     'message' => "Participant count exceeded",
@@ -1027,7 +1052,7 @@ class ApiController extends Controller
                         }
                     }
                     if ($request->teacher_id) {
-                        $isTeacher = Teacher::where('user_id', $request->teacher_id)->first();
+                        $isTeacher = Access::isInstitutionUser($request->teacher_id);
                         if (!$isTeacher) {
                             return response()->json([
                                 'status' => 400,
@@ -1083,7 +1108,7 @@ class ApiController extends Controller
                     }
                 }
                 if ($request->teacher_id) {
-                    $isTeacher = Teacher::where('user_id', $request->teacher_id)->first();
+                    $isTeacher = Access::isInstitutionUser($request->teacher_id);
                     if (!$isTeacher) {
                         return response()->json([
                             'status' => 400,
@@ -1291,24 +1316,57 @@ class ApiController extends Controller
     }
 
 
+    /**
+     * School picker. data.selected_schools = organizations the user is already linked to or
+     * has a role context in (any status); data.other_schools = the rest, paginated.
+     * ?organization_type=district lists districts in the same School shape.
+     */
     public function getSchools(Request $request)
     {
         $name = $request->get('name');
         $user = $request->user();
         try {
+            if ($request->get('organization_type') === 'district') {
+                $selectedIds = UserRole::where('user_id', $user->id)->current()
+                    ->where('organization_type', 'district')->pluck('organization_id')->all();
+                $scope = function ($query) use ($user) {
+                    $query->where('status', 'active');
+                    if ($user->country_id) {
+                        $query->where('country_id', $user->country_id);
+                    }
+                };
+                $selected = District::with('country')->whereIn('id', $selectedIds)->orderBy('name')->get()
+                    ->map->toSchoolShape()->values();
+                $others = District::with('country')->where($scope)
+                    ->when($name, fn ($query) => $query->where('name', 'LIKE', "%{$name}%"))
+                    ->whereNotIn('id', $selectedIds ?: [0])
+                    ->orderBy('name', 'ASC')->paginate(10);
+                $others->setCollection($others->getCollection()->map->toSchoolShape());
+            } else {
+                $selectedIds = UserSchools::where('user_id', $user->id)->pluck('school_id')
+                    ->merge(UserRole::where('user_id', $user->id)->current()
+                        ->where('organization_type', 'school')->pluck('organization_id'))
+                    ->unique()->values()->all();
+                $selected = Schools::with('country')->whereIn('id', $selectedIds)->orderBy('school_name')->get();
+                $others = Schools::where(function ($query) use ($name, $user) {
+                    if ($name) {
+                        $query->where('school_name', 'LIKE', "%{$name}%");
+                    }
+                    if ($user->country_id) {
+                        $query->where('country_id', $user->country_id);
+                    }
+                })->where('status', 'active')
+                    ->whereNotIn('id', $selectedIds ?: [0])
+                    ->orderBy('school_name', 'ASC')->with('country')->paginate(10);
+            }
 
-            $schools = Schools::where(function ($query) use ($name,$user) {
-                if ($name) {
-                    $query->where('school_name', 'LIKE', "%{$name}%");
-                }
-                if ($user->country_id) {
-                    $query->where('country_id',$user->country_id);
-                }
-            })->orderBy('school_name', 'ASC')->with('country')->paginate(10);
             return response()->json([
                 'status' => 200,
                 'message' => 'Schools fetched successfully.',
-                'data' => $schools
+                'data' => [
+                    'selected_schools' => $selected,
+                    'other_schools' => $others,
+                ],
             ], 200);
 
         } catch (\Throwable $th) {
@@ -1733,7 +1791,7 @@ class ApiController extends Controller
     public function createClass(Request $request)
     {
         $user = $request->user();
-        if ($user->type != 'teacher') {
+        if (\App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );
@@ -1866,7 +1924,7 @@ class ApiController extends Controller
     public function deleteClass(Request $request)
     {
         $user = $request->user();
-        if ($user->type != 'teacher') {
+        if (\App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );
@@ -1933,7 +1991,7 @@ class ApiController extends Controller
 
     public function subjectDelete(Request $request){
         $user = $request->user();
-        if ($user->type != 'teacher') {
+        if (\App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );

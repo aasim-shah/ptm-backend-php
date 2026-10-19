@@ -7,11 +7,13 @@ use App\Models\ClassSchool;
 use App\Models\ClassSection;
 use App\Models\ClassSubject;
 use App\Models\SchoolSubjects;
+use App\Models\StudentSubject;
 use App\Models\Subject;
 use App\Models\SubjectTeacher;
 use App\Models\UserSchools;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
@@ -208,6 +210,54 @@ class SubjectController
             );
             return response()->json($response,400);
         }
+    }
+
+    /**
+     * DELETE /teacher/delete/subject/{id}
+     * Deletes a standalone subject the teacher created: removes it from the teacher's
+     * classes and the school's subject list, then soft-deletes it.
+     */
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        $subject = Subject::where('id', $id)->first();
+        if (!$subject) {
+            return response()->json([
+                'error' => true,
+                'message' => "Invalid subject detected.",
+                'code' => 404,
+            ], 404);
+        }
+        if ((int) $subject->teacher_id !== (int) $user->id) {
+            return response()->json([
+                'error' => true,
+                'message' => trans('no_permission_message'),
+                'code' => 403,
+            ], 403);
+        }
+
+        DB::transaction(function () use ($subject, $user) {
+            $sectionIds = SubjectTeacher::where('subject_id', $subject->id)
+                ->where('teacher_id', $user->id)->pluck('class_section_id')->all();
+            $classIds = ClassSection::whereIn('id', $sectionIds)->pluck('class_id')->all();
+
+            SubjectTeacher::where('subject_id', $subject->id)->where('teacher_id', $user->id)->delete();
+            StudentSubject::where('subject_id', $subject->id)->whereIn('class_section_id', $sectionIds)->delete();
+            ClassSubject::where('subject_id', $subject->id)->whereIn('class_id', $classIds)->delete();
+
+            // Only drop it from the school and delete it when no other teacher still uses it.
+            if (!SubjectTeacher::where('subject_id', $subject->id)->exists()) {
+                SchoolSubjects::where('subject_id', $subject->id)->delete();
+                $subject->delete();
+            }
+        });
+
+        return response()->json([
+            'error' => false,
+            'status' => 200,
+            'message' => 'Subject deleted successfully.',
+            'data' => ['id' => (int) $id],
+        ], 200);
     }
 
     public function subjects(){

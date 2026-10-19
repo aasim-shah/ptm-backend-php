@@ -39,7 +39,7 @@ Schools extends Model
     /**
      * @var array
      */
-    protected $fillable = ['principal_id', 'user_id', 'country_id', 'school_name', 'address', 'locality', 'post_town', 'post_code', 'image', 'email', 'phone', 'website', 'created_at', 'updated_at'];
+    protected $fillable = ['principal_id', 'user_id', 'country_id', 'district_id', 'status', 'school_name', 'address', 'locality', 'post_town', 'post_code', 'image', 'email', 'phone', 'website', 'created_at', 'updated_at'];
 
     /**
      * @return \Illuminate\Database\Eloquent\Relations\HasMany
@@ -79,6 +79,11 @@ Schools extends Model
     public function sections()
     {
         return $this->hasMany('App\Models\Section');
+    }
+
+    public function district()
+    {
+        return $this->belongsTo(District::class, 'district_id');
     }
 
     public function country()

@@ -400,11 +400,15 @@ class WebhookController extends Controller
                 $isRoom->user_id = $user_id;
                 $isRoom->sid = $sid;
                 $isRoom->status = 'JOINED';
+                $isRoom->joined_at = Carbon::now();
             }elseif ($isRoom->status == 'JOINED'){
                 $isRoom->updated_at = Carbon::now();
             }elseif ($isRoom->status == 'LEFT'){
                 $isRoom->updated_at = Carbon::now();
                 $isRoom->status = 'JOINED';
+                $isRoom->joined_at = Carbon::now();
+                $isRoom->left_at = null;
+                $isRoom->charged_seconds = 0;
             }
             $isRoom->save();
         }
@@ -418,36 +422,14 @@ class WebhookController extends Controller
                 if($isRoom->status == 'JOINED'){
                     $isRoom->updated_at = Carbon::now();
                     $isRoom->status = 'LEFT';
+                    $isRoom->left_at = $isRoom->left_at ?? Carbon::now();
                     $isRoom->sid = $sid;
                     $isRoom->duration = $isRoom->duration+$duration;
-                    $this->inactivateSubscription($user_id,$duration);
                 }
                 $isRoom->save();
-            }
-        }
-    }
-
-    private function inactivateSubscription($user_id,$duration = 0){
-        $isActive = UserSubscription::where('user_id',$user_id)
-            ->where('status','ACTIVE')->where('remaining_time','!=',0)->first();
-        if($isActive){
-            $remainingTime = $isActive->remaining_time - $duration;
-            $isActive->remaining_time = max($remainingTime, 0);
-            if($remainingTime <= 0){
-                Log::info("reduce call remaining_time by $duration s for user $user_id");
-                $isActive->status = 'INACTIVE';
-                $isActive->call_count = 0;
-
-            }
-            $isActive->save();
-            $isActive = $isActive->refresh();
-
-            if($isActive->status == 'INACTIVE' && $isActive->subscription_id){
-                $subscriptionPlan = new SubscriptionPlan();
-                Log::info("inactivating paypal subscription for subscription_id ". $isActive->subscription_id);
-                $subscriptionPlan->cancelSubscription($isActive->subscription_id,true, [
-                    "reason" => "Inactivate automatically due to 0 remaining time"
-                ]);
+                // Charges only what the app has not already reported for this session, so
+                // a leave event arriving after /left/call is still billed, and never twice.
+                app(\App\Services\CallUsageService::class)->chargeFromWebhook($isRoom, (int) $duration);
             }
         }
     }

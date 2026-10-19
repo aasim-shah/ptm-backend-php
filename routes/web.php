@@ -342,6 +342,12 @@ Route::group(['middleware' => ['Role', 'auth']], function () {
         Route::get('class-users/{class_id}/{type}/{school_id}', [\App\Http\Controllers\V2\PushNotificationController::class, 'classUsers'])->name('class-users');
         Route::post('send-meeting-notification', [\App\Http\Controllers\V2\PushNotificationController::class, 'sendMeetingNotification'])->name('send-meeting-notification');
 
+        // Role requests and role contexts (staff/admin approval, Part A7)
+        Route::get('role-requests', [\App\Http\Controllers\V2\RoleRequestController::class, 'index'])->name('role-requests.index');
+        Route::post('role-requests/{id}/permissions', [\App\Http\Controllers\V2\RoleRequestController::class, 'permissions'])->name('role-requests.permissions');
+        Route::post('role-requests/{id}/{action}', [\App\Http\Controllers\V2\RoleRequestController::class, 'action'])
+            ->where('action', 'approve|reject|suspend|reactivate|end')->name('role-requests.action');
+
     });
 });
 

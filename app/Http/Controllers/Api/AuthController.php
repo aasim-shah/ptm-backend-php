@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Helpers\Utility;
 use App\Models\Parents;
 use App\Models\Plan;
+use App\Models\Schools;
 use App\Models\Teacher;
 use App\Models\User;
 use App\Models\UserSchools;
 use App\Models\ApplicationRating;
 use App\Models\UserSubscription;
+use App\Services\RoleContextService;
+use App\Support\LoginResponse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -112,12 +115,14 @@ class AuthController extends Controller
     public function createUser(Request $request)
     {
         try {
-            // Only parent and teacher accounts can self-register. Admin and principal
-            // accounts are created from the admin panel.
+            // Self-registration doorways: parent, teacher, staff, school admin, district admin.
+            // Staff and admin accounts get no access until an organization approves their
+            // role request (POST /auth/role-requests). Super Admin and Principal accounts
+            // are still created from the admin panel only.
             $request->merge(['type' => strtolower((string) $request->input('type'))]);
             $validateUser = Validator::make($request->all(),
                 [
-                    'type' => 'required|in:parent,teacher',
+                    'type' => 'required|in:parent,teacher,staff,school_admin,district_admin',
                     'first_name' => 'required',
                     'last_name' => 'required',
                     'fcm_id' => 'required',
@@ -155,7 +160,9 @@ class AuthController extends Controller
                 'hear_about_us' => (isset($request->hear_about_us) ? $request->hear_about_us : ''),
             ]);
 
-            $user->assignRole(ucfirst($request->type));
+            if (in_array($request->type, ['parent', 'teacher'], true)) {
+                $user->assignRole(ucfirst($request->type));
+            }
             if ($request->type == 'teacher') {
                 Teacher::create([
                     'user_id' => $user->id,
@@ -194,12 +201,10 @@ class AuthController extends Controller
                 Log::error($e);
             }
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'User Created Successfully',
+            return LoginResponse::make($user, 'User Created Successfully', [
+                'token_type' => 'Bearer',
                 'token' => $user->createToken("API TOKEN")->plainTextToken,
-                'user' => $user,
-            ], 200);
+            ]);
 
         } catch (\Throwable $th) {
             DB::rollBack();
@@ -272,8 +277,6 @@ class AuthController extends Controller
             }
 
             $user = User::where('email', $request->email)->with('rate')->first();
-            $hasSchool = UserSchools::where('user_id',$user->id)->first();
-            $user->has_schools = (bool)$hasSchool;
 
             if($user && !$user->email_verified_at){
 
@@ -296,12 +299,7 @@ class AuthController extends Controller
                     Log::error($e);
                 }
 
-                return response()->json([
-                    'status' => 200,
-                    'message' => 'Your email is not verified.Please check your email inbox',
-                    'user' => $user,
-                    'has_school' => (bool)$hasSchool
-                ], 200);
+                return LoginResponse::make($user, 'Your email is not verified.Please check your email inbox');
             }
 
             $auth = Auth::user();
@@ -310,14 +308,10 @@ class AuthController extends Controller
                 $auth->save();
             }
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'User Logged In Successfully',
+            return LoginResponse::make($user->refresh()->load('rate'), 'User Logged In Successfully', [
                 'token_type' => 'Bearer',
-                'user' => $user->refresh(),
-                'has_school' => (bool)$hasSchool,
-                'token' => $user->createToken("API TOKEN")->plainTextToken
-            ], 200);
+                'token' => $user->createToken("API TOKEN")->plainTextToken,
+            ]);
 
         } catch (\Throwable $th) {
             return response()->json([
@@ -341,6 +335,14 @@ class AuthController extends Controller
                 'status' => 400,
                 'message' => $errorMessage,
             ], 401);
+        }
+        // Parents and teachers join a school here. Staff and admins ask for access through
+        // POST /auth/role-requests instead.
+        if (!in_array(strtolower((string) $user->type), ['parent', 'teacher'], true)) {
+            return response()->json([
+                'status' => 400,
+                'message' => "Use a role request to join an organization with this account type.",
+            ], 400);
         }
         if($user->type == 'teacher'){
             $teacherSchool = UserSchools::with('school')->where('user_id',$user->id)->first();
@@ -384,7 +386,24 @@ class AuthController extends Controller
                 'message' => "Some of the provided schools have already linked you!",
             ], 400);
         }
-        $userSchools = UserSchools::insert($userSchools);
+        $role = strtolower((string) $user->type);
+        $status = ($role === 'teacher' && config('ptm.teacher_requires_approval')) ? 'pending' : 'active';
+        $schoolIds = array_map('intval', $data['schools']);
+        $validSchools = Schools::whereIn('id', $schoolIds)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (count(array_unique($schoolIds)) !== count($validSchools)) {
+            return response()->json([
+                'status' => 400,
+                'message' => "Some of the provided schools do not exist.",
+            ], 400);
+        }
+
+        $userSchools = DB::transaction(function () use ($user, $role, $status, $schoolIds, $userSchools) {
+            // Role context first, so a context sync running in between can't create it as active.
+            foreach ($schoolIds as $schoolId) {
+                app(RoleContextService::class)->linkSchool($user, $role, $schoolId, $status);
+            }
+            return UserSchools::insert($userSchools);
+        });
 
         return response()->json([
             'status' => 200,
@@ -508,18 +527,7 @@ class AuthController extends Controller
                     $query->select(\DB::raw('count(distinct(subject_id))'));
                 }]);
             }])->first();
-        $hasSchool = false;
-        if($user){
-            $hasSchool = UserSchools::where('user_id',$user->id)->first();
-            $user->has_schools = (bool)$hasSchool;
-        }
-
-        return response()->json([
-            'status' => 200,
-            'message' => 'User fetched Successfully',
-            'user' => $user,
-            'has_school' => (bool)$hasSchool
-        ], 200);
+        return LoginResponse::make($user, 'User fetched Successfully');
     }
 
     public function signout(Request $request){

@@ -36,7 +36,7 @@ class AttendanceController extends Controller
         }
         Log::info($request);
         $user = $request->user();
-        if ($user->type != 'teacher') {
+        if (\App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -194,7 +194,7 @@ class AttendanceController extends Controller
             return Access::forbidden();
         }
         $user = $request->user();
-        if ($user->type != 'teacher') {
+        if (\App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -292,7 +292,7 @@ class AttendanceController extends Controller
             return Access::forbidden();
         }
         $user = $request->user();
-        if ($user->type != 'teacher') {
+        if (\App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),

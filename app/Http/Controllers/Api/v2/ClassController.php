@@ -6,6 +6,7 @@ use App\Models\ClassSchool;
 use App\Models\ClassSection;
 use App\Models\ClassSubject;
 use App\Models\Subject;
+use App\Support\Access;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,8 +18,22 @@ class ClassController
 
     public function getTeacherClassList(Request $request){
         $user = $request->user();
-        $class = ClassSchool::whereHas('sections',function ($query) use ($user){
-            $query->where('class_teacher_id',$user->id);
+        $scope = Access::classScope($user);
+        $schoolIds = Access::schoolIds($user);
+        $class = ClassSchool::where(function ($query) use ($user, $scope, $schoolIds) {
+            if ($scope === 'none') {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+            if ($scope === 'own') {
+                $query->whereHas('sections', function ($query) use ($user) {
+                    $query->where('class_teacher_id', $user->id);
+                });
+            }
+            // Role contexts only see classes of their organization.
+            if ($schoolIds !== null) {
+                $query->whereIn('school_id', $schoolIds ?: [0]);
+            }
         })->with('allSubjects.subject')
             ->with(['class_section' => function($query) use($user){
                 $query->withCount(['students'=>function($query){

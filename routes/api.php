@@ -34,21 +34,35 @@ Route::any('/auth/settings', [AuthController::class, 'settings'])->middleware('a
 Route::any('/auth/update/profile', [AuthController::class, 'updateUser'])->middleware('auth:sanctum');
 Route::any('/auth/get/profile', [AuthController::class, 'getProfile'])->middleware('auth:sanctum');
 Route::any('/auth/login', [AuthController::class, 'loginUser'])->middleware('throttle:10,1');
+
+// Role contexts (roles & organizations update, Part A5)
+Route::post('auth/role-requests', [\App\Http\Controllers\Api\RoleContextController::class, 'requestRole'])->middleware(['auth:sanctum', 'throttle:20,1']);
+Route::post('auth/context/switch', [\App\Http\Controllers\Api\RoleContextController::class, 'switchContext'])->middleware('auth:sanctum');
+Route::post('update-remaining-time', [\App\Http\Controllers\Api\CallUsageController::class, 'updateRemainingTime'])->middleware('auth:sanctum');
+
+// Web Panel API for approving role requests (Part A7); not called by the mobile app.
+Route::group(['prefix' => 'admin', 'middleware' => 'auth:sanctum'], function () {
+    Route::get('role-requests', [\App\Http\Controllers\Api\RoleRequestAdminController::class, 'index']);
+    Route::get('permissions', [\App\Http\Controllers\Api\RoleRequestAdminController::class, 'permissionCatalog']);
+    Route::put('role-requests/{id}/permissions', [\App\Http\Controllers\Api\RoleRequestAdminController::class, 'permissions']);
+    Route::post('role-requests/{id}/{action}', [\App\Http\Controllers\Api\RoleRequestAdminController::class, 'decide'])
+        ->where('action', 'approve|reject|suspend|reactivate|end');
+});
 Route::any('add/school', [ApiController::class, 'postSchool'])->middleware('auth:sanctum');
 Route::get('get/teachers', [ApiController::class, 'getTeachers'])->middleware('auth:sanctum');
 Route::any('search/user', [ApiController::class, 'searchjParentTeacher'])->middleware('auth:sanctum');
 Route::get('get/parents', [ApiController::class, 'getParents'])->middleware('auth:sanctum');
 Route::any('add/meetings', [ApiController::class, 'postMeeting'])->middleware('auth:sanctum');
 Route::any('get/meetings', [ApiController::class, 'getMeetings'])->middleware('auth:sanctum');
-Route::any('add/meetings-v2', [ApiController::class, 'postMeetingV2'])->middleware('auth:sanctum');
-Route::any('get/meetings-v2', [ApiController::class, 'getMeetingsV2'])->middleware('auth:sanctum');
+Route::any('add/meetings-v2', [ApiController::class, 'postMeetingV2'])->middleware(['auth:sanctum', 'ptm.can:schedule.use']);
+Route::any('get/meetings-v2', [ApiController::class, 'getMeetingsV2'])->middleware(['auth:sanctum', 'ptm.can:schedule.use']);
 Route::any('send/pincode', [ApiController::class, 'sendPincode'])->middleware('auth:sanctum');
 Route::any('forgot/password', [ApiController::class, 'forgotPassword1'])->middleware('throttle:5,1');
 Route::any('reset/password', [ApiController::class, 'resetpassword'])->middleware('auth:sanctum');
 Route::any('verify/pincode', [ApiController::class, 'verifyPincode'])->middleware('auth:sanctum');
 Route::any('get/status/meetings', [ApiController::class, 'getMeeting'])->middleware('auth:sanctum');
 Route::any('search/meetings', [ApiController::class, 'searchMeetings'])->middleware('auth:sanctum');
-Route::any('update/meetings', [ApiController::class, 'updateMeeting'])->middleware('auth:sanctum');
+Route::any('update/meetings', [ApiController::class, 'updateMeeting'])->middleware(['auth:sanctum', 'ptm.can:schedule.use']);
 Route::any('get/schools', [ApiController::class, 'getSchools'])->middleware('auth:sanctum');
 Route::any('get/countries', [ApiController::class, 'getCountries'])->middleware('auth:sanctum');
 
@@ -65,7 +79,7 @@ Route::get('students', [\App\Http\Controllers\Api\v2\StudentController::class, '
 
 Route::delete('auth/delete', [\App\Http\Controllers\Api\AuthController::class, 'deleteUser'])->middleware('auth:sanctum');
 Route::post('auth/rate', [\App\Http\Controllers\Api\AuthController::class, 'store'])->middleware('auth:sanctum');
-Route::get('auth/announcement', [\App\Http\Controllers\Api\v2\AnnouncementController::class, 'announcement'])->middleware('auth:sanctum');
+Route::get('auth/announcement', [\App\Http\Controllers\Api\v2\AnnouncementController::class, 'announcement'])->middleware(['auth:sanctum', 'ptm.can:events.view']);
 
 Route::get('get/schools-details', [\App\Http\Controllers\Api\ApiController::class, 'getSchool'])->middleware('auth:sanctum');
 
@@ -75,8 +89,8 @@ Route::delete('parent/student', [\App\Http\Controllers\Api\v2\StudentController:
 
 Route::get('notifications', [\App\Http\Controllers\Api\v2\NotificationController::class, 'notificationLogs'])->middleware('auth:sanctum');
 Route::post('notifications-read', [\App\Http\Controllers\Api\v2\NotificationController::class, 'notificationRead'])->middleware('auth:sanctum');
-Route::post('chat/send', [\App\Http\Controllers\Api\v2\ChatController::class, 'createChat'])->middleware('auth:sanctum');
-Route::post('chat/read', [\App\Http\Controllers\Api\v2\ChatController::class, 'chatRead'])->middleware('auth:sanctum');
+Route::post('chat/send', [\App\Http\Controllers\Api\v2\ChatController::class, 'createChat'])->middleware(['auth:sanctum', 'ptm.can:messages.use']);
+Route::post('chat/read', [\App\Http\Controllers\Api\v2\ChatController::class, 'chatRead'])->middleware(['auth:sanctum', 'ptm.can:messages.use']);
 
 Route::get('student-attendance', [\App\Http\Controllers\Api\v2\StudentController::class, 'studentAttendance'])->middleware('auth:sanctum');
 
@@ -88,9 +102,9 @@ Route::get('active/subscription', [\App\Http\Controllers\Payment\SubscriptionCon
 Route::post('plan/trail', [\App\Http\Controllers\Payment\SubscriptionController::class, 'activateTrail'])->middleware('auth:sanctum');
 
 
-Route::post('join/call', [\App\Http\Controllers\MeetingController::class, 'makeCallRoom'])->middleware('auth:sanctum');
+Route::post('join/call', [\App\Http\Controllers\MeetingController::class, 'makeCallRoom'])->middleware(['auth:sanctum', 'ptm.can:video.use']);
 Route::post('left/call', [\App\Http\Controllers\MeetingController::class, 'leftFormCallRoom'])->middleware('auth:sanctum');
-Route::post('channel/token', [\App\Http\Controllers\MeetingController::class, 'channelToken'])->middleware('auth:sanctum');
+Route::post('channel/token', [\App\Http\Controllers\MeetingController::class, 'channelToken'])->middleware(['auth:sanctum', 'ptm.can:video.use']);
 
 
 
@@ -145,7 +159,7 @@ Route::group(['prefix' => 'parent'], function () {
     //Non Authenticated APIs
     Route::post('login', [ParentApiController::class, 'login'])->middleware('throttle:10,1');
     //Authenticated APIs
-    Route::group(['middleware' => ['auth:sanctum', 'userType:parent']], function () {
+    Route::group(['middleware' => ['auth:sanctum', 'ptm.role:parent']], function () {
 
         //APIS Without Child ID
         Route::get('announcements', [ParentApiController::class, 'getAnnouncements']); //Get Announcementes
@@ -160,9 +174,9 @@ Route::group(['prefix' => 'parent'], function () {
         
         Route::get('children-list', [ParentApiController::class, 'noOfChildren']);
 
-        Route::get('school/teachers', [\App\Http\Controllers\Api\v2\StudentController::class, 'schoolTeacher']);
+        Route::get('school/teachers', [\App\Http\Controllers\Api\v2\StudentController::class, 'schoolTeacher'])->middleware('ptm.can:messages.use,schedule.use');
         Route::get('classes/teacher/fetch', [\App\Http\Controllers\Api\v2\ClassController::class, 'getTeacherClasses']);
-        Route::get('student/report', [\App\Http\Controllers\Api\v2\StudentController::class, 'studentReport']);
+        Route::get('student/report', [\App\Http\Controllers\Api\v2\StudentController::class, 'studentReport'])->middleware('ptm.can:reports.view_children');
         Route::get('student/teachers', [\App\Http\Controllers\Api\v2\StudentController::class, 'studentTeachers']);
 
         Route::get('class/subjects', [\App\Http\Controllers\Api\v2\ClassController::class, 'subjects2']);
@@ -199,7 +213,7 @@ Route::group(['prefix' => 'parent'], function () {
             Route::get('get-assignments-report', [ParentApiController::class, 'getAssignmentReport']); // Assignment Report Route
 
         });
-        Route::get('chat/{to_user?}', [\App\Http\Controllers\Api\v2\ChatController::class, 'teacherChat']);
+        Route::get('chat/{to_user?}', [\App\Http\Controllers\Api\v2\ChatController::class, 'teacherChat'])->middleware('ptm.can:messages.use');
         Route::post('class/students/requests/cancel', [\App\Http\Controllers\Api\v2\StudentController::class, 'classSectionStudentsRequestsCancel']);
 
     });
@@ -212,7 +226,17 @@ Route::group(['prefix' => 'teacher'], function () {
     //Non Authenticated APIs
     Route::post('login', [TeacherApiController::class, 'login'])->middleware('throttle:10,1');
     //Authenticated APIs
-    Route::group(['middleware' => ['auth:sanctum', 'userType:teacher,principal']], function () {
+    // Called by every institution role (teacher, staff, school/district admin); the
+    // controllers limit the data to what the active context may see (Part A6).
+    Route::group(['middleware' => ['auth:sanctum', 'ptm.role:teacher,principal,staff,school_admin,district_admin']], function () {
+        Route::get('classes/fetch', [\App\Http\Controllers\Api\v2\ClassController::class, 'getTeacherClassList']);
+        Route::get('class/students', [\App\Http\Controllers\Api\v2\StudentController::class, 'classSectionStudents']);
+        Route::get('student/parents', [\App\Http\Controllers\Api\v2\StudentController::class, 'studentParents']);
+        Route::get('chat/{to_user?}', [\App\Http\Controllers\Api\v2\ChatController::class, 'parentChat'])->middleware('ptm.can:messages.use');
+    });
+
+    // Teacher-only actions.
+    Route::group(['middleware' => ['auth:sanctum', 'ptm.role:teacher,principal']], function () {
         Route::get('classes', [TeacherApiController::class, 'classes']);
 
         Route::get('class/subjects', [\App\Http\Controllers\Api\v2\ClassController::class, 'subjects']);
@@ -274,38 +298,35 @@ Route::group(['prefix' => 'teacher'], function () {
         //Profile Detials
         Route::get('get-profile-details', [TeacherApiController::class, 'getProfileDetails']);
 
-        Route::post('class/create', [ApiController::class, 'createClass']);
-        Route::get('class/students', [\App\Http\Controllers\Api\v2\StudentController::class, 'classSectionStudents']);
+        Route::post('class/create', [ApiController::class, 'createClass'])->middleware('ptm.can:classes.manage');
         Route::post('school-sections', [\App\Http\Controllers\Api\v2\SchoolController::class, 'schoolSection']);
-        Route::get('classes/fetch', [\App\Http\Controllers\Api\v2\ClassController::class, 'getTeacherClassList']);
-        Route::post('subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'create']);
-        Route::post('assign/subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'assign']);
-        Route::post('update/subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'update']);
-        Route::post('mark-attendance', [\App\Http\Controllers\Api\v2\AttendanceController::class,'attendance']);
-        Route::post('edit-attendance', [\App\Http\Controllers\Api\v2\AttendanceController::class,'editAttendance']);
-        Route::get('view-attendance/class', [\App\Http\Controllers\Api\v2\AttendanceController::class,'viewAttendance']);
+        Route::post('subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'create'])->middleware('ptm.can:classes.manage');
+        Route::post('assign/subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'assign'])->middleware('ptm.can:classes.manage');
+        Route::post('update/subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'update'])->middleware('ptm.can:classes.manage');
+        Route::post('mark-attendance', [\App\Http\Controllers\Api\v2\AttendanceController::class,'attendance'])->middleware('ptm.can:attendance.manage');
+        Route::post('edit-attendance', [\App\Http\Controllers\Api\v2\AttendanceController::class,'editAttendance'])->middleware('ptm.can:attendance.manage');
+        Route::get('view-attendance/class', [\App\Http\Controllers\Api\v2\AttendanceController::class,'viewAttendance'])->middleware('ptm.can:attendance.manage');
 
         Route::post('create/exam', [\App\Http\Controllers\Api\v2\TeacherController::class,'createExam']);
         Route::post('create/exam/timetable', [\App\Http\Controllers\Api\v2\TeacherController::class,'timetable']);
-        Route::post('create/student-report', [\App\Http\Controllers\Api\v2\TeacherController::class,'addStudentReport']);
-        Route::delete('delete/student-report/{id}', [\App\Http\Controllers\Api\v2\TeacherController::class,'deleteStudentReport']);
-        Route::post('update/student-report', [\App\Http\Controllers\Api\v2\TeacherController::class,'editStudentReport']);
+        Route::post('create/student-report', [\App\Http\Controllers\Api\v2\TeacherController::class,'addStudentReport'])->middleware('ptm.can:reports.manage');
+        Route::delete('delete/student-report/{id}', [\App\Http\Controllers\Api\v2\TeacherController::class,'deleteStudentReport'])->middleware('ptm.can:reports.manage');
+        Route::post('update/student-report', [\App\Http\Controllers\Api\v2\TeacherController::class,'editStudentReport'])->middleware('ptm.can:reports.manage');
 
 
         Route::get('fetch-student-class', [TeacherApiController::class, 'getStudentsListForClass']);
-        Route::get('student/parents', [\App\Http\Controllers\Api\v2\StudentController::class, 'studentParents']);
         Route::get('class/parents', [\App\Http\Controllers\Api\ParentApiController::class, 'classParents']);
-        Route::get('reports/count', [\App\Http\Controllers\Api\v2\TeacherController::class, 'reportCount']);
-        Route::get('class/reports/count', [\App\Http\Controllers\Api\v2\TeacherController::class, 'ClassReportCount']);
-        Route::get('class/subject/reports/count', [\App\Http\Controllers\Api\v2\TeacherController::class, 'ClassSubjectReportCount']);
+        Route::get('reports/count', [\App\Http\Controllers\Api\v2\TeacherController::class, 'reportCount'])->middleware('ptm.can:reports.manage');
+        Route::get('class/reports/count', [\App\Http\Controllers\Api\v2\TeacherController::class, 'ClassReportCount'])->middleware('ptm.can:reports.manage');
+        Route::get('class/subject/reports/count', [\App\Http\Controllers\Api\v2\TeacherController::class, 'ClassSubjectReportCount'])->middleware('ptm.can:reports.manage');
 
 
-        Route::get('chat/{to_user?}', [\App\Http\Controllers\Api\v2\ChatController::class, 'parentChat']);
 
         Route::get('class/students/requests', [\App\Http\Controllers\Api\v2\StudentController::class, 'classSectionStudentsRequests']);
         Route::post('student/accept', [\App\Http\Controllers\Api\v2\StudentController::class, 'acceptOrRejectStudentFromClassSection'])->middleware('auth:sanctum');
-        Route::delete('class/delete', [\App\Http\Controllers\Api\ApiController::class, 'deleteClass'])->middleware('auth:sanctum');
-        Route::delete('subject/delete', [\App\Http\Controllers\Api\ApiController::class, 'subjectDelete'])->middleware('auth:sanctum');
+        Route::delete('class/delete', [\App\Http\Controllers\Api\ApiController::class, 'deleteClass'])->middleware('ptm.can:classes.manage');
+        Route::delete('subject/delete', [\App\Http\Controllers\Api\ApiController::class, 'subjectDelete'])->middleware('ptm.can:classes.manage');
+        Route::delete('delete/subject/{id}', [\App\Http\Controllers\Api\v2\SubjectController::class, 'destroy'])->middleware('ptm.can:classes.manage');
 
     });
 

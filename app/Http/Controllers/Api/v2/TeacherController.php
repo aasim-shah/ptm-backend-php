@@ -46,7 +46,7 @@ class TeacherController extends Controller
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );
@@ -101,7 +101,7 @@ class TeacherController extends Controller
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );
@@ -177,7 +177,7 @@ class TeacherController extends Controller
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );
@@ -225,7 +225,7 @@ class TeacherController extends Controller
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );
@@ -282,7 +282,7 @@ class TeacherController extends Controller
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'message' => trans('no_permission_message')
             );
@@ -341,7 +341,7 @@ class TeacherController extends Controller
 
     public function submitMarks(Request $request)
     {
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -425,7 +425,7 @@ class TeacherController extends Controller
             return Access::forbidden();
         }
         Log::info($request);
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -439,7 +439,10 @@ class TeacherController extends Controller
             'quarter_id' => 'required',
             'reports.*.grade' => 'nullable',
             'class_id' => 'required|numeric',
-            'subject_id' => 'required|numeric',
+            // The app sends subject_id on each report item; the top-level one is optional.
+            'subject_id' => 'required_without:reports.0.subject_id|nullable|numeric',
+            'reports' => 'required|array',
+            'reports.*.subject_id' => 'nullable|numeric',
             'session_year_id' => 'required|numeric',
             'reports.*.student_id' => 'required',
             'reports.*.points' => 'nullable|numeric',
@@ -457,7 +460,11 @@ class TeacherController extends Controller
             );
             return response()->json($response);
         }
-        $isSubject = Subject::where('id', $request->subject_id)->first();
+        $subjectIds = collect($request->reports ?? [])
+            ->map(fn ($report) => $report['subject_id'] ?? $request->subject_id)
+            ->push($request->subject_id)->filter()->unique()->values();
+        $isSubject = $subjectIds->isNotEmpty()
+            && Subject::whereIn('id', $subjectIds)->count() === $subjectIds->count();
         if (!$isSubject) {
             $response = array(
                 'error' => true,
@@ -516,7 +523,7 @@ class TeacherController extends Controller
             foreach ($request->reports as $report) {
                 $deleted =  StudentReportCards::where('class_id', $class_id)
                     ->where('quarter_id', $request->quarter_id)
-                    ->where('subject_id', $request->subject_id)
+                    ->where('subject_id', $report['subject_id'] ?? $request->subject_id)
                     ->where('session_year_id', $request->session_year_id)
                     ->where('student_id', $report['student_id'])
                     ->delete();
@@ -528,7 +535,7 @@ class TeacherController extends Controller
                     "grade" => $report['grade'],
                     "session_year" => $sessionYear->name,
                     "session_year_id" => $request->session_year_id,
-                    "subject_id" => $request->subject_id,
+                    "subject_id" => $report['subject_id'] ?? $request->subject_id,
                     "student_id" => $report['student_id'],
                     "points" => $report['points'],
                     'created_at' => Carbon::now(),
@@ -712,7 +719,7 @@ class TeacherController extends Controller
             return Access::forbidden();
         }
         Log::info($request);
-        if ($request->user()->type != 'teacher') {
+        if (\App\Support\Access::role($request->user()) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -723,7 +730,10 @@ class TeacherController extends Controller
         $validator = Validator::make($request->all(), [
             'quarter_id' => 'required',
             'class_id' => 'required|numeric',
-            'subject_id' => 'required|numeric',
+            // The app sends subject_id on each report item; the top-level one is optional.
+            'subject_id' => 'required_without:reports.0.subject_id|nullable|numeric',
+            'reports' => 'required|array',
+            'reports.*.subject_id' => 'nullable|numeric',
             'session_year_id' => 'required|numeric',
             'reports.*.student_id' => 'required',
             'reports.*.points' => 'nullable|numeric',
@@ -743,7 +753,11 @@ class TeacherController extends Controller
             );
             return response()->json($response);
         }
-        $isSubject = Subject::where('id', $request->subject_id)->first();
+        $subjectIds = collect($request->reports ?? [])
+            ->map(fn ($report) => $report['subject_id'] ?? $request->subject_id)
+            ->push($request->subject_id)->filter()->unique()->values();
+        $isSubject = $subjectIds->isNotEmpty()
+            && Subject::whereIn('id', $subjectIds)->count() === $subjectIds->count();
         if (!$isSubject) {
             $response = array(
                 'error' => true,
@@ -786,7 +800,7 @@ class TeacherController extends Controller
             foreach ($request->reports as $report) {
                $deleted = StudentReportCards::where('class_id', $request->class_id)
                     ->where('quarter_id', $request->quarter_id)
-                    ->where('subject_id', $request->subject_id)
+                    ->where('subject_id', $report['subject_id'] ?? $request->subject_id)
                     ->where('session_year_id', $request->session_year_id)
                     ->where('student_id', $report['student_id'])
                     ->delete();
@@ -798,7 +812,7 @@ class TeacherController extends Controller
                     "grade" => $report['grade'],
                     "session_year" => $sessionYear->name,
                     "session_year_id" => $request->session_year_id,
-                    "subject_id" => $request->subject_id,
+                    "subject_id" => $report['subject_id'] ?? $request->subject_id,
                     "student_id" => $report['student_id'],
                     "points" => $report['points'],
                     'created_at' => Carbon::now(),

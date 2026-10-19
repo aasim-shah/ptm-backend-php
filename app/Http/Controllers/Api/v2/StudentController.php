@@ -17,8 +17,10 @@ use App\Models\StudentReportCards;
 use App\Models\Students;
 use App\Models\StudentSubject;
 use App\Models\User;
+use App\Models\UserRole;
 use App\Models\UserSchools;
 use App\Services\NotificationSender;
+use App\Services\RoleContextService;
 use App\Support\Access;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Http\Request;
@@ -48,6 +50,11 @@ class StudentController
         $name = $request->get('name');
         $userID = $request->user()->id;
         $class_id = $request->class_id;
+        $scope = Access::classScope($request->user());
+        $schoolIds = Access::schoolIds($request->user());
+        if ($scope === 'none') {
+            return response()->json(['error' => false, 'message' => trans('data_fetch_successfully'), 'data' => []]);
+        }
 
         $students = User::where(function ($query) use ($name) {
             if($name){
@@ -60,11 +67,16 @@ class StudentController
             ->with('student.father')
             ->with('student.mother')
             ->with('userSchool.school')
-            ->whereHas('student', function ($query) use ($userID, $class_id) {
+            ->whereHas('student', function ($query) use ($userID, $class_id, $scope, $schoolIds) {
                 $query->where('class_status','ACCEPTED');
-                $query->whereHas('class_section', function ($query) use ($userID, $class_id) {
-                    $query->where('class_teacher_id', $userID);
+                $query->whereHas('class_section', function ($query) use ($userID, $class_id, $scope, $schoolIds) {
+                    if ($scope === 'own') {
+                        $query->where('class_teacher_id', $userID);
+                    }
                     $query->where('class_id', $class_id);
+                    if ($schoolIds !== null) {
+                        $query->whereHas('class', fn ($query) => $query->whereIn('school_id', $schoolIds ?: [0]));
+                    }
                 });
             })->orderBy('first_name', 'ASC')->get();
 
@@ -133,7 +145,7 @@ class StudentController
         $fatherId = null;
         $motherId = null;
         $file_path = null;
-        if ($user_->type == 'parent') {
+        if (\App\Support\Access::role($user_) == 'parent') {
             if(!$user_->parent){
                 $response = array(
                     'error' => true,
@@ -211,7 +223,7 @@ class StudentController
     {
         $student_id = $request->student_id;
         $user_ = $request->user();
-        if ($user_->type != 'parent') {
+        if (\App\Support\Access::role($user_) != 'parent') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -369,7 +381,7 @@ class StudentController
 //        StudentReportCards::where('student_id',$request->user_id)->where('class_id',$request->class_id)->delete();
 //        StudentQuarter::where('student_id',$request->user_id)->where('class_id',$request->class_id)->delete();
 
-        if($user->type == 'parent'){
+        if(\App\Support\Access::role($user) == 'parent'){
             $message = "Student ".$isSchoolsAssigned->user->first_name." ".$isSchoolsAssigned->user->last_name.
                 " has been removed from ".$class->class->name." by parent";
             $this->notificationSender->sendNotification(
@@ -512,13 +524,13 @@ class StudentController
         $firstName = trim($request->get('first_name')) ?? null;
         $lastName = trim($request->get('last_name')) ?? null;
 
-        if ($user->type == 'parent') {
+        if (\App\Support\Access::role($user) == 'parent') {
             if ($user->gender == 'male') {
                 $fatherId = $user->parent->user_id;
             } else {
                 $motherId = $user->parent->user_id;
             }
-        } elseif ($user->type == 'teacher') {
+        } elseif (\App\Support\Access::role($user) == 'teacher') {
             if ($request->class_id) {
                 $classIds = [$request->class_id];
             } else {
@@ -599,7 +611,7 @@ class StudentController
 
         $user = $request->user();
         $user_id = $request->user_id;
-        if ($user && $user->type != 'parent') {
+        if ($user && \App\Support\Access::role($user) != 'parent') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -690,7 +702,7 @@ class StudentController
     {
         $userId = $request->user()->id;
         $school_id  = $request->school_id;
-        if($request->user()->type == 'teacher'){
+        if(!Access::actsAsParent($request->user())){
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -698,14 +710,20 @@ class StudentController
             );
             return response()->json($response);
         }
-        if(!$school_id){
-            $schoolIds = UserSchools::where('user_id', $userId)->pluck('school_id')->toArray();
-            $userIds = UserSchools::whereIn('school_id', $schoolIds)->pluck('user_id')->toArray();
-            $teachers = User::whereHas('teacher')->with('userSchool.school')->whereIn('id', $userIds)->get();
-        }else{
-            $userIds = UserSchools::where('school_id', $school_id)->pluck('user_id')->toArray();
-            $teachers = User::whereHas('teacher')->with('userSchool.school')->whereIn('id', $userIds)->get();
+        $schoolIds = Access::schoolIds($request->user())
+            ?? UserSchools::where('user_id', $userId)->pluck('school_id')->toArray();
+        if ($school_id) {
+            $schoolIds = in_array((int) $school_id, array_map('intval', $schoolIds), true) ? [(int) $school_id] : [];
         }
+        $userIds = UserSchools::whereIn('school_id', $schoolIds)->pluck('user_id')->toArray();
+        // Staff and admins appear next to teachers when their context lets them chat or
+        // meet (messages.use / schedule.use), in the same User shape.
+        $staffIds = $this->reachableStaffIds($schoolIds);
+        $teachers = User::where(function ($query) use ($userIds, $staffIds) {
+            $query->where(function ($query) use ($userIds) {
+                $query->whereHas('teacher')->whereIn('id', $userIds ?: [0]);
+            })->orWhereIn('id', $staffIds ?: [0]);
+        })->with('userSchool.school')->get();
 
         $response = array(
             'error' => false,
@@ -714,6 +732,28 @@ class StudentController
             'code' => 200,
         );
         return response()->json($response, 200);
+    }
+
+    /** Staff/admin users of the schools whose active context has messages.use or schedule.use. */
+    private function reachableStaffIds(array $schoolIds): array
+    {
+        if (!$schoolIds) {
+            return [];
+        }
+        $contexts = app(RoleContextService::class);
+        $districtIds = Schools::whereIn('id', $schoolIds)->whereNotNull('district_id')->pluck('district_id')->all();
+        return UserRole::whereIn('role', ['staff', 'school_admin', 'district_admin'])
+            ->where('status', 'active')->current()
+            ->where(function ($query) use ($schoolIds, $districtIds) {
+                $query->where(function ($query) use ($schoolIds) {
+                    $query->where('organization_type', 'school')->whereIn('organization_id', $schoolIds);
+                })->orWhere(function ($query) use ($districtIds) {
+                    $query->where('organization_type', 'district')->whereIn('organization_id', $districtIds ?: [0]);
+                });
+            })->get()
+            ->filter(fn (UserRole $context) => $contexts->contextCan($context, 'messages.use')
+                || $contexts->contextCan($context, 'schedule.use'))
+            ->pluck('user_id')->unique()->values()->all();
     }
 
     public function studentReport(Request $request){
@@ -725,7 +765,7 @@ class StudentController
         $quarter_id = $request->quarter_id ?? null;
         $session_year = $request->session_year_id ?? null;
         $student_id = $request->student_id;
-        if ($user && $user->type != 'parent') {
+        if ($user && \App\Support\Access::role($user) != 'parent') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -793,7 +833,7 @@ class StudentController
             return Access::forbidden();
         }
         $user = $request->user();
-        if ($user && $user->type != 'parent') {
+        if ($user && \App\Support\Access::role($user) != 'parent') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -829,7 +869,18 @@ class StudentController
     }
     public function studentParents(Request $request){
         $user = $request->user();
-        if ($user && $user->type != 'teacher') {
+        $role = Access::role($user);
+        if (in_array($role, ['staff', 'school_admin', 'district_admin'], true)) {
+            $request->validate(['student_id' => 'required']);
+            if (!$this->institutionCanSeeStudent($user, $request->student_id)) {
+                return response()->json([
+                    'error' => false,
+                    'message' => 'Student\'s parents fetched Successfully.',
+                    'data' => [],
+                    'code' => 200,
+                ], 200);
+            }
+        } elseif ($user && $role != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -863,6 +914,23 @@ class StudentController
         );
         return response()->json($response, 200);
     }
+    /** Whether a staff/admin context may see a student (by the student's users.id). */
+    private function institutionCanSeeStudent(User $user, $studentUserId): bool
+    {
+        $scope = Access::classScope($user);
+        if ($scope === 'none') {
+            return false;
+        }
+        $schoolIds = Access::schoolIds($user) ?? [];
+        return Students::where('user_id', $studentUserId)
+            ->whereHas('class_section', function ($query) use ($user, $scope, $schoolIds) {
+                if ($scope === 'own') {
+                    $query->where('class_teacher_id', $user->id);
+                }
+                $query->whereHas('class', fn ($query) => $query->whereIn('school_id', $schoolIds ?: [0]));
+            })->exists();
+    }
+
     public function studentAttendance(Request $request){
 
         $request->validate([
@@ -904,7 +972,7 @@ class StudentController
 
     public function classSectionStudentsRequestsCancel(Request $request){
         $user = $request->user();
-        if ($user && $user->type != 'parent') {
+        if ($user && \App\Support\Access::role($user) != 'parent') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),

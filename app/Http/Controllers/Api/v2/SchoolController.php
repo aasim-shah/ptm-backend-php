@@ -16,7 +16,7 @@ class SchoolController extends Controller
 
     public function schoolSection(Request $request){
         $user = $request->user();
-        if($user->type != 'teacher'){
+        if(\App\Support\Access::role($user) != 'teacher'){
             $response = array(
                 'error' => true,
                 'message' => 'Failed to create school sections.',

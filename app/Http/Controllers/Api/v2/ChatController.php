@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Models\UserSchools;
 use App\Services\NotificationSender;
 use App\Services\PushNotificationSender;
+use App\Services\RoleContextService;
+use App\Support\Access;
 use Carbon\Carbon;
 use Google\Cloud\Firestore\FirestoreClient;
 use Illuminate\Http\Request;
@@ -36,28 +38,25 @@ class ChatController extends Controller
     {
         $to_user = request()->to_user;
 
-        if (Auth::user()->type != 'parent') {
+        if (!Access::actsAsParent(Auth::user())) {
             return response()->json([
                 'status' => 400,
                 'message' => trans('no_permission_message')
             ], 400);
         }
         $sender_id = Auth::user()->id;
-        $school = UserSchools::where('user_id', $sender_id)->first();
+        // With a role context the chat list is limited to that context's school.
+        $schoolIds = Access::schoolIds(Auth::user())
+            ?? UserSchools::where('user_id', $sender_id)->pluck('school_id')->toArray();
 
-        $schoolIds = UserSchools::where('user_id', $sender_id)->pluck('school_id')->toArray();
-        $schoolsPrincipals = Schools::whereIn('id', $schoolIds)->pluck('principal_id')->toArray();
-
-        if (!$school) {
+        if (!$schoolIds) {
             return response()->json([
                 'status' => 400,
                 'message' => trans('no_school_assigned')
             ], 400);
         }
-        $userIds = UserSchools::whereHas('user', function ($query) {
-            $query->where('type', 'teacher');
-        })->whereIn('school_id', $schoolIds)->pluck('user_id')->toArray();
-        $userIds = array_merge($userIds,$schoolsPrincipals);
+        // Teachers, principals and staff/admins of the parent's schools.
+        $userIds = app(RoleContextService::class)->institutionUserIds($schoolIds);
 
 //        $school = Schools::where('id',$school->school_id)->first();
 
@@ -99,17 +98,9 @@ class ChatController extends Controller
             });
         })->with(['user' => function ($query) use ($sender_id, $userIds) {
             $query->where('id', '!=', $sender_id);
-            $query->where(function ($query){
-                $query->where('type', 'teacher');
-                $query->orWhere('type', 'Principal');
-            });
             $query->whereIn('id', $userIds);
         }])->with(['receiver' => function ($query) use ($sender_id, $userIds) {
             $query->where('id', '!=', $sender_id);
-            $query->where(function ($query){
-                $query->where('type', 'teacher');
-                $query->orWhere('type', 'Principal');
-            });
             $query->whereIn('id', $userIds);
         }])
             ->orderBy('updated_at', 'DESC')->get();
@@ -127,14 +118,21 @@ class ChatController extends Controller
     public function parentChat()
     {
         $to_user = request()->to_user;
-        if (Auth::user()->type != 'teacher') {
+        $role = Access::role(Auth::user());
+        if (in_array($role, ['staff', 'school_admin', 'district_admin'], true)) {
+            return $this->institutionChat($to_user);
+        }
+        if ($role != 'teacher') {
             return response()->json([
                 'status' => 400,
                 'message' => trans('no_permission_message')
             ], 400);
         }
         $sender_id = Auth::user()->id;
-        $school = UserSchools::where('user_id', $sender_id)->first();
+        $contextSchoolIds = Access::schoolIds(Auth::user());
+        $school = $contextSchoolIds
+            ? UserSchools::where('user_id', $sender_id)->where('school_id', $contextSchoolIds[0])->first()
+            : UserSchools::where('user_id', $sender_id)->first();
         if (!$school) {
             return response()->json([
                 'status' => 400,
@@ -228,6 +226,9 @@ class ChatController extends Controller
                 ]
             ], 400);
         }
+        if (!$this->mayMessage($user, $receiver)) {
+            return Access::forbidden();
+        }
         $file_name = null;
         $file = $request->file;
         $destinationPath = null;
@@ -314,6 +315,71 @@ class ChatController extends Controller
         return response()->json($isChat->refresh());
 
     }
+    /**
+     * GET /teacher/chat for staff and admin contexts: the caller's conversations with
+     * people of the active organization. Same response shape as the teacher list; an empty
+     * list when there are none.
+     */
+    private function institutionChat($to_user_id)
+    {
+        $user = Auth::user();
+        $sender_id = $user->id;
+        $userIds = app(RoleContextService::class)->userIdsInSchools(Access::schoolIds($user) ?? []);
+        $userIds = array_values(array_diff($userIds, [(int) $sender_id]));
+
+        $chats = null;
+        $to_user = null;
+        if ($to_user_id && in_array((int) $to_user_id, $userIds, true)) {
+            $chats = Chat::with('user')
+                ->where(function ($query) use ($sender_id, $to_user_id) {
+                    $query->where('user_id', $sender_id)->where('to_user_id', $to_user_id);
+                })
+                ->orWhere(function ($query) use ($sender_id, $to_user_id) {
+                    $query->where('to_user_id', $sender_id)->where('user_id', $to_user_id);
+                })->first();
+            $to_user = User::where('id', $to_user_id)->first();
+            if ($chats) {
+                $chats->new_message = false;
+                $chats->save();
+            }
+        }
+
+        $chatUsers = Chat::where(function ($query) use ($userIds) {
+            $query->whereIn('user_id', $userIds ?: [0])->orWhereIn('to_user_id', $userIds ?: [0]);
+        })->where(function ($query) use ($sender_id) {
+            $query->where('user_id', $sender_id)->orWhere('to_user_id', $sender_id);
+        })->with(['user' => function ($query) use ($sender_id, $userIds) {
+            $query->where('id', '!=', $sender_id)->whereIn('id', $userIds ?: [0]);
+        }])->with(['receiver' => function ($query) use ($sender_id, $userIds) {
+            $query->where('id', '!=', $sender_id)->whereIn('id', $userIds ?: [0]);
+        }])->orderBy('updated_at', 'DESC')->get();
+
+        return response()->json([
+            'chat_users' => $chatUsers,
+            'to_user_id' => $to_user->id ?? null,
+            'to_user_name' => $to_user ? $to_user->first_name . " " . $to_user->last_name : null,
+            'chat' => $chats,
+        ]);
+    }
+
+    /**
+     * Relationship rule for sending (Part A6). Without a role context the legacy behaviour
+     * is kept. With one, the receiver must belong to the context's organization, and a
+     * parent may only message the institution side (teachers, principals, staff, admins).
+     */
+    private function mayMessage(User $sender, User $receiver): bool
+    {
+        $schoolIds = Access::schoolIds($sender);
+        if ($schoolIds === null) {
+            return true;
+        }
+        $contexts = app(RoleContextService::class);
+        if (Access::actsAsParent($sender)) {
+            return in_array((int) $receiver->id, $contexts->institutionUserIds($schoolIds), true);
+        }
+        return in_array((int) $receiver->id, $contexts->userIdsInSchools($schoolIds), true);
+    }
+
     private function brodCastMessage($user,$message,$to_user_id,$chatJson){
 
         $message =  $message ?? "New File";

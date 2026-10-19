@@ -43,6 +43,7 @@ class User extends Authenticatable
         'status',
         'reset_request',
         'remember_token',
+        'last_context_id',
     ];
 
     /**
@@ -94,6 +95,9 @@ class User extends Authenticatable
     }
     public function userSchool() {
         return $this->hasMany(UserSchools::class, 'user_id');
+    }
+    public function roleContexts() {
+        return $this->hasMany(UserRole::class, 'user_id');
     }
 
 

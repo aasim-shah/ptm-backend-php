@@ -774,7 +774,14 @@ class MeetingController extends Controller
             $isRoom->user_id = $user_id;
             $isRoom->chanel_name = $channel_name;
             $isRoom->status = 'JOINED';
+            $isRoom->joined_at = Carbon::now();
         }else{
+            if ($isRoom->status != 'JOINED') {
+                // A new call session in the same channel: start a fresh charge window.
+                $isRoom->joined_at = Carbon::now();
+                $isRoom->left_at = null;
+                $isRoom->charged_seconds = 0;
+            }
             $isRoom->status = 'JOINED';
             $isRoom->updated_at = Carbon::now();
         }
@@ -797,6 +804,7 @@ class MeetingController extends Controller
             ->first();
         if($isRoom){
             $isRoom->status = 'LEFT';
+            $isRoom->left_at = Carbon::now();
             $isRoom->updated_at = Carbon::now();
             $isRoom->save();
         }

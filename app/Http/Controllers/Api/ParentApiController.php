@@ -2011,7 +2011,7 @@ class ParentApiController extends Controller
         }
 
         $user = $request->user();
-        if ($user && $user->type != 'teacher') {
+        if ($user && \App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
