@@ -2,7 +2,7 @@
 # Build from the repository root:  docker compose -f docker-compose.prod.yml build
 
 # ---- Front-end assets -------------------------------------------------------
-FROM node:18-alpine AS assets
+FROM node:22-alpine AS assets
 WORKDIR /app
 COPY package.json package-lock.json webpack.mix.js ./
 RUN npm ci --no-audit --no-fund
@@ -36,6 +36,8 @@ RUN IPE_PROCESSOR_COUNT=${IPE_PROCESSOR_COUNT} install-php-extensions pdo_mysql 
 
 COPY docker/php.ini /usr/local/etc/php/conf.d/app.ini
 
+RUN apt-get update && apt-get install -y --no-install-recommends clamav clamav-freshclam && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /var/www/html
 COPY --from=vendor --chown=www-data:www-data /app /var/www/html
 COPY --from=assets --chown=www-data:www-data /app/public/js /var/www/html/public/js
@@ -43,7 +45,8 @@ COPY --from=assets --chown=www-data:www-data /app/public/css /var/www/html/publi
 COPY --from=assets --chown=www-data:www-data /app/public/mix-manifest.json /var/www/html/public/mix-manifest.json
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY docker/worker-entrypoint.sh /usr/local/bin/worker-entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/worker-entrypoint.sh
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["apache2-foreground"]

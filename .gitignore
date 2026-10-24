@@ -50,3 +50,7 @@ Homestead.json
 # Release build output
 /build/
 /secrets/
+
+# Local design discovery and browser verification
+/.superdesign/
+/.playwright-mcp/

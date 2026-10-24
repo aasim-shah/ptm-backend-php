@@ -30,7 +30,7 @@ class AttendanceController extends Controller
 
     public function attendance(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -189,7 +189,7 @@ class AttendanceController extends Controller
 
     public function editAttendance(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -287,7 +287,7 @@ class AttendanceController extends Controller
 
     public function viewAttendance(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }

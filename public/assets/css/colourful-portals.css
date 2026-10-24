@@ -1,0 +1,298 @@
+/* Client reference palette shared by every role portal and the legacy admin UI.
+   This stylesheet changes presentation only; action visibility stays server-owned. */
+:root {
+    --ptm-navy: #1c293f;
+    --ptm-ink: #102557;
+    --ptm-blue: #086de5;
+    --ptm-pink: #d32973;
+    --ptm-purple: #7937d7;
+    --ptm-green: #008844;
+    --ptm-orange: #b85c00;
+    --ptm-teal: #007e90;
+    --lm-accent: #086de5;
+    --lm-accent-pressed: #005bc4;
+    --lm-accent-subtle: #e4f0ff;
+    --lm-accent-ring: #147efb55;
+    --theme-color: #086de5;
+}
+
+/* Dark navigation anchors the bright content, matching the client's reference. */
+.ws-sidebar, .sidebar {
+    background: linear-gradient(165deg, #202e46, #182437 78%);
+    border-right-color: #243650;
+}
+.ws-sidebar .ws-brand { color: #fff !important; }
+.ws-brand span { color: #83dcff; letter-spacing: 2.6px; }
+.ws-caption { color: #aebed5; }
+.ws-sidebar nav a { color: #edf3ff; }
+.ws-sidebar nav a:hover {
+    background: #304562;
+    color: #fff;
+    text-decoration: none;
+}
+.ws-sidebar nav a[aria-current] {
+    background: linear-gradient(110deg, #0874e0, #0867dd);
+    color: #fff;
+    box-shadow: 0 5px 16px #0a6be74d;
+}
+.ws-sidebar nav a .fa { width: 20px; margin-right: 11px; text-align: center; color: #c5dcff; }
+.ws-sidebar nav a[aria-current] .fa { color: white; }
+.ws-sidebar .ws-legacy { color: #80ddff; }
+.ws-sidebar-foot { color: #ffd36b; }
+.ws-sidebar-foot span { color: #a6b7cf; }
+.sidebar .nav .nav-item .nav-link,
+.sidebar .nav .nav-item .nav-link .menu-title { color: #eaf1ff; }
+.sidebar .nav .nav-item .nav-link i.menu-icon { color: #c9d8f2; }
+.sidebar .nav .nav-item .nav-link:hover { background: #304562; color: #fff; }
+.sidebar .nav .nav-item.active > .nav-link {
+    background: linear-gradient(110deg, #0874e0, #0867dd);
+    box-shadow: 0 5px 14px #096df44d;
+}
+.sidebar .nav .nav-item.active > .nav-link .menu-title,
+.sidebar .nav .nav-item.active > .nav-link i.menu-icon,
+.sidebar .nav .nav-item .nav-link:hover i.menu-icon { color: #fff; }
+.sidebar .nav.sub-menu { background: #17243a; border-radius: 10px; }
+.sidebar .nav.sub-menu .nav-item .nav-link { color: #cbdaf0; }
+.sidebar .nav.sub-menu .nav-item .nav-link:hover,
+.sidebar .nav.sub-menu .nav-item .nav-link.active { color: #87ddff; background: #243b58; }
+.navbar .navbar-brand-wrapper { background: #202e46; border-color: #243650; }
+.navbar .navbar-brand-wrapper .lm-brand__name { color: white; }
+.navbar .navbar-brand-wrapper .lm-brand__tag { color: #b0d7ff; }
+.lm-brand__mark { background: linear-gradient(135deg, #118df5, #a537e4 60%, #e6408b); }
+
+/* Shared surfaces: light blue canvas, crisp navy typography, saturated accents. */
+.ws-body, .content-wrapper { background: #f1f6ff; color: var(--ptm-ink); }
+.ws-topbar { background: #fff; border-bottom: 1px solid #dfeaff; }
+.ws-context label { color: #496285; }
+.ws-context select { background: #edf4ff; color: #173e70; border: 1px solid #d5e4fa; }
+.ws-account > span {
+    padding: 8px 13px;
+    color: #1755a0;
+    background: #e7f1ff;
+    border-radius: 24px;
+    font-weight: 700;
+}
+.ws-page-heading:not(.ws-welcome) {
+    padding: 4px 0;
+}
+.ws-page-heading h1, .ws-card h2, .ws-card h3, .lm-panel__title { color: var(--ptm-ink); }
+.ws-eyebrow { color: #0861bf !important; }
+.ws-page-heading p, .ws-card > p { color: #4e6080; }
+.ws-btn, .btn-theme {
+    background: linear-gradient(130deg, #0874e0, #0560d2);
+    border-color: #0968d9;
+    box-shadow: 0 4px 10px #0b6fe525;
+}
+.ws-btn:hover, .btn-theme:hover { background: #005bc4; }
+.ws-btn-secondary { background: #e7f2ff; color: #075db5 !important; }
+.ws-link, .ws-body a { color: #0861bf; }
+.ws-btn:focus-visible, .ws-body a:focus-visible { outline: 3px solid #e7a800; outline-offset: 4px; }
+
+/* A welcoming school banner reused from the original admin illustration. */
+.ws-welcome {
+    position: relative;
+    isolation: isolate;
+    min-height: 200px;
+    padding: 30px;
+    overflow: hidden;
+    border: 1px solid #f0e4fb;
+    border-radius: 18px;
+    background: linear-gradient(110deg, #ffe4f2 0%, #fff2fb 40%, #e6edff 70%, #e5fbf3 100%);
+    box-shadow: 0 6px 22px #5874a00a;
+}
+.ws-welcome > div:first-child { position: relative; z-index: 2; max-width: 57%; }
+.ws-welcome h1 { font-size: clamp(25px, 2.5vw, 37px); }
+.ws-welcome .ws-eyebrow { color: #ad2064 !important; }
+.ws-welcome .ws-date { position: absolute; z-index: 2; right: 20px; top: 14px; font-size: 10px; }
+.ws-welcome .ws-date small { font-size: 9px; }
+.ws-hero-art { position: absolute; right: -15px; bottom: 0; width: 40%; height: 178px; z-index: 0; }
+.ws-hero-art svg { width: 100%; height: 100%; border-radius: 45% 0 0 0; }
+.ws-hero-tagline {
+    position: absolute;
+    z-index: 1;
+    right: 24%;
+    top: 50px;
+    margin: 0 !important;
+    color: #1a4380 !important;
+    font: italic 24px/1.25 Georgia, serif !important;
+    transform: rotate(-8deg);
+    text-shadow: 0 1px 0 white;
+}
+.ws-hero-tagline span { color: #df3984; font-size: 34px; }
+
+/* Four overview cards use the client's pink / blue / purple / green sequence. */
+.ws-stat {
+    --tile: #d32973;
+    --tile-light: #ff72af;
+    --tile-soft: #ffe0ed;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 135px;
+    border: 1px solid #ffc6de;
+    padding: 20px 18px;
+    background: linear-gradient(120deg, var(--tile-soft), #fff4fa);
+    box-shadow: 0 5px 16px #bc42710b;
+}
+.ws-stat:nth-child(2) { --tile: #0870e7; --tile-light: #41b7ff; --tile-soft: #d9edff; border-color: #b9deff; background: linear-gradient(120deg, #d6edff, #ebf2ff); }
+.ws-stat:nth-child(3) { --tile: #7937d7; --tile-light: #b46bff; --tile-soft: #ecddff; border-color: #d8c0ff; background: linear-gradient(120deg, #e9dbff, #f3edff); }
+.ws-stat:nth-child(4) { --tile: #008844; --tile-light: #35d990; --tile-soft: #d4f8e4; border-color: #b3edcf; background: linear-gradient(120deg, #d2f5e2, #eafcf2); }
+.ws-stat > .ws-stat-icon {
+    flex: 0 0 60px;
+    width: 60px;
+    height: 72px;
+    display: grid;
+    place-items: center;
+    border-radius: 17px;
+    background: linear-gradient(145deg, var(--tile-light), var(--tile));
+    color: white;
+    font-size: 28px;
+    box-shadow: 0 7px 13px color-mix(in srgb, var(--tile) 25%, transparent), inset 0 2px 1px #ffffff66;
+    transform: rotate(-3deg);
+}
+.ws-stat-content { min-width: 0; }
+.ws-stat p { font-size: 12px; color: #24416b; font-weight: 700; }
+.ws-stat strong { color: #102557; font-size: 32px; line-height: 1.3; margin: 5px 0; }
+.ws-stat-content > span { font-size: 10px; color: #4d6483; line-height: 1.4; display: block; }
+
+/* Colour continues through action cards, lists and forms, not just the homepage. */
+.ws-card { border-color: #dbe6f5; box-shadow: 0 4px 15px #234d8110; }
+.ws-card > h2:first-child, .ws-card-heading > h2 {
+}
+.ws-notice:nth-of-type(3n + 1) { padding-left: 14px; background: linear-gradient(90deg, #fff4f9, white); }
+.ws-notice:nth-of-type(3n + 2) { padding-left: 14px; background: linear-gradient(90deg, #f0f8ff, white); }
+.ws-notice:nth-of-type(3n) { padding-left: 14px; background: linear-gradient(90deg, #f7f1ff, white); }
+.ws-notice { margin-top: 10px; border-radius: 8px; padding-right: 12px; }
+.ws-notice p { color: #475c7b; }
+.ws-meta { color: #596c87; }
+.ws-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ws-shortcuts a {
+    display: flex;
+    align-items: center;
+    min-height: 65px;
+    padding: 14px 16px;
+    border: 1px solid #ffffff55;
+    border-radius: 11px;
+    color: white;
+    background: linear-gradient(125deg, #008646, #007e45);
+    box-shadow: inset 0 2px 0 #ffffff40, 0 4px 10px #15532e10;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.45;
+    text-decoration: none;
+}
+.ws-shortcuts a:nth-child(6n + 2) { background: linear-gradient(125deg, #0874e0, #075ec9); }
+.ws-shortcuts a:nth-child(6n + 3) { background: linear-gradient(125deg, #8840d1, #7530c6); }
+.ws-shortcuts a:nth-child(6n + 4) { background: linear-gradient(125deg, #c92c76, #b51f60); }
+.ws-shortcuts a:nth-child(6n + 5) { background: linear-gradient(125deg, #b85c00, #984a00); }
+.ws-shortcuts a:nth-child(6n) { background: linear-gradient(125deg, #007e90, #006b7b); }
+.ws-shortcuts a:hover { filter: brightness(.94); text-decoration: none; }
+.ws-avatar { color: #0868bb; background: #dceeff; }
+.ws-row:nth-child(3n + 2) .ws-avatar { color: #b12768; background: #ffe0ee; }
+.ws-row:nth-child(3n) .ws-avatar { color: #6f38b2; background: #edddff; }
+.ws-row { border-bottom-color: #e5edf8; }
+.ws-badge { background: #d4f7e3; color: #116237; border: 1px solid #abe6c8; }
+.ws-card.ws-tinted {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(120deg, #def2ff, #eee6ff 70%, #ffe4f2);
+    border: 1px solid #c8ddff;
+}
+.ws-tinted > h2 { padding-left: 0 !important; font-size: 24px; }
+.ws-connection-icon {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 15px;
+    background: linear-gradient(145deg, #41a9ff, #0e70e5);
+    color: #fff;
+    font-size: 26px;
+    margin-bottom: 18px;
+    box-shadow: 0 5px 12px #0b70d72b;
+}
+.ws-tinted .ws-btn { background: linear-gradient(120deg, #008646, #007e45); border-color: #008544; }
+.ws-body th { background: linear-gradient(110deg, #e1eeff, #eae4fc); color: #203d6b; }
+.ws-body tbody tr:nth-child(even) { background: #f6faff; }
+.ws-body td { border-bottom-color: #e5edf8; }
+.ws-form input, .ws-form select, .ws-form textarea { background: #fbfdff; border-color: #cadaee; }
+.ws-form input:focus, .ws-form select:focus, .ws-form textarea:focus { border-color: #1184ed; }
+.ws-form label { color: #38547b; }
+.ws-form fieldset { border-color: #d5baf1; background: #faf5ff; }
+.ws-form legend { color: #7035a8; font-weight: 700; }
+.ws-body details { background: #f1f7ff; border-radius: 9px; padding: 12px; }
+.ws-empty { background: linear-gradient(110deg, #fff0f7, #eef6ff); border-color: #b8cdec; }
+.ws-mobile-nav { border-top: 1px solid #dbe6f5; box-shadow: 0 -5px 18px #234d8110; }
+.ws-mobile-nav a .fa { display: block; margin-bottom: 4px; font-size: 17px; }
+.ws-mobile-nav a[aria-current] { color: #075fb9; background: #e2f0ff; border-radius: 8px; }
+
+/* Keep the existing admin shell and give its widgets the same richer palette. */
+.lm-welcome { background: linear-gradient(110deg, #ffe1f0, #fff0fb 45%, #e5f0ff 80%, #e1f8ed); border-color: #efd9f5; }
+.lm-welcome__title { color: #0e2863; }
+.lm-welcome__eyebrow { color: #12417b; }
+.lm-welcome__tagline { color: #164782; }
+.lm-kpi { background: var(--kpi-soft); border-color: #ffffff; box-shadow: 0 4px 12px #28416a0c; border-radius: 15px; }
+.lm-kpi--pink { --kpi-soft: #ffe0ed; --kpi-from: #ff76b1; --kpi-to: #dc337e; }
+.lm-kpi--blue { --kpi-soft: #ddecff; --kpi-from: #4ebeff; --kpi-to: #1577ee; }
+.lm-kpi--green { --kpi-soft: #d9f7e7; --kpi-from: #39d78b; --kpi-to: #04a35b; }
+.lm-kpi--orange { --kpi-soft: #fff0d4; --kpi-from: #ffc45c; --kpi-to: #ed9b1f; }
+.lm-kpi--purple { --kpi-soft: #eadeff; --kpi-from: #ba75ff; --kpi-to: #8b43e8; }
+.lm-kpi--teal { --kpi-soft: #d9f7fb; --kpi-from: #51d6de; --kpi-to: #10a7bb; }
+.lm-panel { border-color: #dce6f5; box-shadow: 0 4px 15px #234d810a; }
+.lm-panel__head { background: linear-gradient(110deg, #eef5ff, #f6f0ff); border-radius: 14px 14px 0 0; }
+.lm-actions li:nth-child(4n + 1) .lm-action { background: #e7f3ff; }
+.lm-actions li:nth-child(4n + 2) .lm-action { background: #f2e7ff; }
+.lm-actions li:nth-child(4n + 3) .lm-action { background: #ffe8f1; }
+.lm-actions li:nth-child(4n) .lm-action { background: #e3f8ed; }
+.lm-action { padding: 12px; border-radius: 12px; margin: 4px 0; }
+.lm-action__title { color: #173e6a; }
+.card .card-title { color: #15386b; }
+.table thead th { background: #eaf1ff; color: #23436e; }
+.badge-primary { background: #dcecff; color: #075ebc; }
+.badge-success { background: #d5f6e5; color: #126839; }
+.lm-auth { background: radial-gradient(ellipse at 12% 15%, #ffdbec, transparent 46%), radial-gradient(ellipse at 90% 80%, #d4f5e7, transparent 45%), linear-gradient(135deg, #eef5ff, #eee4ff); }
+.lm-auth__card { box-shadow: 0 15px 55px #314b7a1a; }
+
+@media (max-width: 1150px) {
+    .ws-stat { gap: 10px; padding: 16px 12px; }
+    .ws-stat > .ws-stat-icon { width: 46px; flex-basis: 46px; height: 58px; font-size: 23px; border-radius: 13px; }
+    .ws-stat p { font-size: 11px; }
+    .ws-stat strong { font-size: 28px; }
+    .ws-hero-tagline { display: none; }
+}
+@media (max-width: 800px) {
+    .ws-sidebar { background: linear-gradient(120deg, #202e46, #182437); }
+    .ws-sidebar nav a { background: #30435d; color: #eef5ff; }
+    .ws-sidebar nav a .fa { font-size: 12px; margin-right: 7px; }
+    .ws-sidebar nav a[aria-current] { background: #1279f2; }
+    .ws-welcome { min-height: 205px; padding: 24px 20px; }
+    .ws-welcome > div:first-child { max-width: 68%; }
+    .ws-welcome h1 { font-size: 25px; line-height: 1.2; }
+    .ws-welcome .ws-eyebrow { font-size: 9px !important; }
+    .ws-welcome > div:first-child > p:last-child { font-size: 11px; }
+    .ws-hero-art { width: 46%; height: 120px; right: -26px; opacity: .9; }
+    .ws-stat { min-height: 117px; gap: 12px; padding: 14px 12px; }
+    .ws-stat > .ws-stat-icon { flex-basis: 40px; width: 40px; height: 54px; font-size: 21px; border-radius: 11px; }
+    .ws-stat p { font-size: 10px; line-height: 1.4; }
+    .ws-stat strong { font-size: 28px; margin: 3px 0; }
+    .ws-stat-content > span { font-size: 9px; }
+    .ws-shortcuts a { padding: 12px; font-size: 11px; }
+    .ws-tinted > h2 { max-width: none; }
+    .ws-mobile-nav a { min-width: 50px; text-align: center; padding: 4px 6px; }
+}
+@media (max-width: 380px) {
+    .ws-stat { gap: 8px; padding: 12px 9px; }
+    .ws-stat > .ws-stat-icon { flex-basis: 32px; width: 32px; height: 46px; font-size: 18px; }
+    .ws-shortcuts { grid-template-columns: 1fr; }
+}
+
+/* Maintain readable flyouts when the legacy sidebar is collapsed. */
+@media (min-width: 992px) {
+    .sidebar-icon-only .sidebar .nav .nav-item.hover-open .nav-link .menu-title,
+    .sidebar-icon-only .sidebar .nav .nav-item.hover-open .collapse,
+    .sidebar-icon-only .sidebar .nav .nav-item.hover-open .collapsing {
+        background: #243650;
+        color: #fff;
+    }
+}

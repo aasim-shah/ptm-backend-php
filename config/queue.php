@@ -29,6 +29,7 @@ return [
     */
 
     'connections' => [
+        'workspace' => ['driver' => 'database', 'table' => 'workspace_jobs', 'queue' => 'workspace', 'retry_after' => 180, 'after_commit' => true],
 
         'sync' => [
             'driver' => 'sync',

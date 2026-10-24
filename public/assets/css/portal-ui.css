@@ -1,0 +1,214 @@
+/* Shared portal refresh. Preserve real form actions, role scope and native controls.
+   Colour comes from fills and icons; cards never use a one-sided accent border. */
+.ws-body {
+    --ui-ink: #1b2b49; --ui-muted: #697b94; --ui-line: #e4eaf3;
+    --ui-accent: #176ce0; --ui-soft: #eaf2ff; --ui-radius: 18px;
+    background: #f6f8fc; color: var(--ui-ink); font-size: 14px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+}
+.ws-body[data-role="parent"] { --ui-accent:#bf357a; --ui-soft:#fff0f6; }
+.ws-body[data-role="staff"] { --ui-accent:#7851ca; --ui-soft:#f3edff; }
+.ws-body[data-role="school_admin"] { --ui-accent:#188160; --ui-soft:#e9f8f1; }
+.ws-body[data-role="district_admin"] { --ui-accent:#087f91; --ui-soft:#e7f7fa; }
+.ws-body a { text-underline-offset: 3px; }
+.ws-body button, .ws-body input, .ws-body select, .ws-body textarea { letter-spacing: inherit; }
+.ws-body button:disabled { cursor: not-allowed; opacity:.55; }
+.ws-main { max-width: 1420px; padding: 32px 36px; }
+.ws-page-heading { margin-bottom: 26px; }
+.ws-page-heading h1 { font-size: 29px; letter-spacing: -.9px; font-weight: 750; }
+.ws-page-heading p { font-size: 13px; line-height: 1.6; max-width: 640px; }
+.ws-page-heading .ws-eyebrow { color: var(--ui-accent)!important; font-size: 10px!important; letter-spacing: 1.6px; }
+.ws-date { background: white; border: 1px solid var(--ui-line); border-radius: 12px; padding: 11px 14px; color: #536783; }
+.ws-grid { gap: 24px; }
+.ws-grid > *, .ws-profile-grid > *, .ws-people-grid > * { min-width:0; }
+.ws-card { border: 1px solid var(--ui-line); border-radius: var(--ui-radius); padding: 25px; box-shadow: 0 4px 20px #263f6805; margin-bottom: 24px; }
+.ws-card h2 { font-size: 16px; font-weight: 700; letter-spacing: -.25px; }
+.ws-card h3 { font-size: 14px; }
+.ws-card > p { color: var(--ui-muted); font-size: 13px; line-height: 1.65; }
+.ws-section-heading { display:flex; align-items:center; gap:13px; margin-bottom: 23px; }
+.ws-section-heading > div { min-width:0; }
+.ws-section-heading h2 { margin:0; line-height:1.4; }
+.ws-section-heading p { margin:4px 0 0; font-size:12px; line-height:1.55; color:var(--ui-muted); }
+.ws-section-icon { width:43px; height:43px; display:grid; place-items:center; flex:0 0 43px; border-radius:13px; background:var(--ui-soft); color:var(--ui-accent); font-size:18px; }
+.ws-section-icon[data-tone="purple"] { background:#f0eaff; color:#7952ce; }
+.ws-section-icon[data-tone="pink"] { background:#ffeaf3; color:#c42e77; }
+.ws-section-icon[data-tone="green"] { background:#e6f7ee; color:#16815c; }
+.ws-section-icon[data-tone="orange"] { background:#fff2dd; color:#a9660b; }
+.ws-section-icon[data-tone="blue"] { background:#e9f2ff; color:#196bce; }
+/* Every form has the same rhythm and a sensible maximum reading width. */
+.ws-form { margin-top:20px; gap:19px; max-width:780px; width:100%; }
+.ws-section-heading + .ws-form { margin-top:0; }
+.ws-form label { gap:8px; font-size:12px; font-weight:650; line-height:1.5; color:#415574; min-width:0; }
+.ws-form :is(input, select, textarea) {
+    min-width:0; width:100%; min-height:46px; border:1px solid #dce4ef; border-radius:11px;
+    padding:11px 13px; background:#fff; color:#23344f; font-size:14px; font-weight:450;
+    box-shadow:0 1px 2px #142b4c03; transition:border-color .15s,box-shadow .15s;
+}
+.ws-form :is(input, textarea)::placeholder { color:#94a0b1; opacity:1; }
+.ws-form :is(input, select, textarea):focus { outline:0; border-color:#4c91f1; box-shadow:0 0 0 3px #247cf017; }
+.ws-form :is(input, select, textarea):disabled, .ws-form :is(input, textarea)[readonly] { background:#f4f6fa; color:#75839a; }
+.ws-form :is(input, textarea)[aria-invalid="true"] { border-color:#d34763; box-shadow:0 0 0 3px #d3476310; }
+.ws-form textarea { min-height:132px; resize:vertical; line-height:1.7; }
+.ws-form select {
+    appearance:none; padding-right:38px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7d96' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 13px center;
+}
+.ws-form :is(input[type="checkbox"],input[type="radio"]) { width:18px; height:18px; min-height:18px; padding:0; flex:0 0 18px; accent-color:#176ce0; box-shadow:none; }
+.ws-form .ws-check { display:flex; align-items:center; gap:10px; margin:0; font-weight:500; font-size:12px; }
+.ws-form input[type="file"] { background:#f8fbff; padding:11px; border:1px dashed #b8cce9; font-size:12px; }
+.ws-form input[type="file"]::file-selector-button { margin-right:12px; padding:8px 12px; border:0; border-radius:7px; background:#e7efff; color:#1859ad; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+.ws-form fieldset { min-width:0; margin:0; padding:17px; display:grid; gap:13px; border:1px solid #e5dbf5; border-radius:12px; background:#faf7ff; }
+.ws-form legend { font-size:11px; letter-spacing:.2px; color:#72539c; font-weight:650; padding:0 6px; }
+.ws-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); max-width:none; }
+.ws-form-grid > :is(fieldset, details, .ws-form-actions, .ws-field-hint, .ws-form-note, button),
+.ws-form-grid > label:has(textarea), .ws-form-grid > label:has(input[type="file"]),
+.ws-form-grid > label:has(select[name="school_id"]), .ws-form-grid > label:has(select[name="teacher_id"]),
+.ws-form-grid > label:has(select[name="recipient_id"]), .ws-form-grid > label:has(select[name="participant_id"]),
+.ws-form-grid > label:has(input[name="title"]), .ws-form-grid > label:has(select[name="timezone"]),
+.ws-full { grid-column:1/-1; }
+.ws-form--stack { grid-template-columns:minmax(0,1fr); }
+.ws-field-hint { font-size:11px; line-height:1.6; font-weight:400; color:#74849a; margin:0; }
+.ws-form-note { margin:0; padding:13px 15px; background:#f3f7fd; border-radius:10px; color:#61738e; font-size:12px; }
+.ws-form-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:14px; margin-top:5px; padding-top:4px; }
+.ws-form-actions > a { font-size:12px; font-weight:550; }
+.ws-btn { display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:43px; border:1px solid transparent; border-radius:11px; padding:10px 17px; font-size:12px; font-weight:650; line-height:1.45; background:#126de1; box-shadow:0 3px 7px #146ce115; }
+.ws-btn:hover { background:#095dc9; box-shadow:0 4px 12px #146ce122; }
+.ws-btn-small { min-height:35px; padding:7px 12px; font-size:11px; border-radius:9px; }
+.ws-btn-secondary { background:#edf3ff; border-color:#d9e6fc; color:#215bb0!important; box-shadow:none; }
+.ws-btn-secondary:hover { background:#dfeaff; }
+.ws-link-danger { color:#b63957!important; }
+.ws-inline { gap:10px; }
+.ws-body details { border:1px solid #e7edf7; border-radius:12px; background:#f7f9fd; padding:16px; margin-top:0; }
+.ws-body summary { display:flex; align-items:center; gap:10px; color:#405a80; font-size:12px; font-weight:600; list-style:none; }
+.ws-body summary::-webkit-details-marker { display:none; }
+.ws-body summary::after { content:'+'; margin-left:auto; font-size:20px; color:#7a8daa; font-weight:400; }
+.ws-body details[open] > summary::after { content:'−'; }
+.ws-body details label { margin-top:16px; }
+.ws-body details .ws-field-row label { margin-top:0; }
+.ws-field-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.ws-password-fields { margin-top:18px; display:grid; gap:18px; }
+.ws-password-fields > label { margin-top:0!important; }
+/* Profile: a small identity banner and two purposeful columns, not a giant form. */
+.ws-profile-banner { display:flex; align-items:center; gap:17px; padding:23px 26px; margin-bottom:24px; border:1px solid #e7e6f7; border-radius:20px; background:linear-gradient(110deg,#eaf3ff,#f2ecff 65%,#fff0f6); }
+.ws-profile-avatar { width:64px; height:64px; flex:0 0 64px; display:grid; place-items:center; border-radius:20px; background:linear-gradient(140deg,#9b7df0,#7355d3); color:#fff; font-size:23px; font-weight:750; box-shadow:0 5px 12px #7859d31a; }
+.ws-profile-banner h2 { margin:0 0 3px; font-size:19px; letter-spacing:-.4px; }
+.ws-profile-banner p { margin:0; color:#607493; font-size:12px; overflow-wrap:anywhere; }
+.ws-profile-banner .ws-role-pill { margin-left:auto; }
+.ws-role-pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:30px; background:var(--ui-soft); color:var(--ui-accent); font-size:10px; line-height:1.4; font-weight:650; }
+.ws-profile-grid { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(270px,1fr); gap:24px; align-items:start; }
+.ws-membership-card { padding:17px; border-radius:13px; border:1px solid #e3edf8; background:#f6faff; margin:0 0 12px; }
+.ws-membership-card h3 { font-size:13px; margin:10px 0 3px; color:#283c5e; }
+.ws-membership-card p { margin:0; color:#7a8aa1; font-size:11px; }
+.ws-security-callout { padding:18px; border-radius:13px; background:#f5efff; margin-top:21px; }
+.ws-security-callout h3 { margin:0 0 6px; color:#634399; font-size:13px; }
+.ws-security-callout p { color:#7a6993; font-size:12px; line-height:1.6; margin:0 0 11px; }
+.ws-security-callout a { font-size:12px; color:#6940a5; font-weight:600; }
+.ws-people-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; align-items:start; }
+.ws-people-grid > .ws-card { height:100%; margin-bottom:0; }
+.ws-people-grid + .ws-card { margin-top:24px; }
+/* Quieter tables and richer metadata remain legible alongside colourful actions. */
+.ws-body table { font-size:12px; }
+.ws-body th { background:#f2f5fb; padding:13px 15px; font-size:10px; color:#647894; letter-spacing:.6px; }
+.ws-body td { padding:16px 15px; color:#344866; border-bottom:1px solid #edf1f7; vertical-align:middle; }
+.ws-body tbody tr:nth-child(even) { background:#fcfdff; }
+.ws-body tbody tr:hover { background:#f7faff; }
+.ws-table-wrap { border:1px solid #e8edf5; border-radius:12px; }
+.ws-badge { border:0; font-size:10px; padding:5px 9px; background:#e4f6ed; color:#1c7956; border-radius:20px; }
+.ws-notice { padding:18px!important; border:1px solid #edf0f7!important; border-radius:13px; margin-top:13px; background:#f9fbff!important; }
+.ws-notice:nth-of-type(3n+2) { background:#fff8fb!important; border-color:#f5e8ef!important; }
+.ws-notice:nth-of-type(3n) { background:#faf7ff!important; border-color:#eee7f8!important; }
+.ws-notice p { font-size:12px; line-height:1.75; }
+.ws-row { padding:16px 0; }
+.ws-empty-line { color:#7c8da6!important; font-size:12px!important; padding:25px 0; }
+.ws-alert { padding:15px 18px; border-radius:12px; font-size:12px; }
+.ws-stat { min-height:116px; border-radius:16px; box-shadow:none; }
+.ws-stat > .ws-stat-icon { transform:none; width:52px; flex-basis:52px; height:60px; border-radius:15px; }
+.ws-stat strong { font-size:29px; }
+.ws-sidebar { width:238px; padding:28px 17px; border:0; }
+.ws-sidebar nav a { padding:11px 13px; border-radius:11px; font-size:12px; }
+.ws-shell { margin-left:238px; }
+.ws-caption { margin:24px 12px 11px; font-size:9px; }
+.ws-brand { font-size:21px; padding-bottom:22px; }
+.ws-sidebar-foot { line-height:1.7; }
+.ws-topbar { padding:15px 36px; min-height:82px; background:#ffffffed; }
+.ws-context label { font-size:9px; color:#7c8ba3; letter-spacing:1px; margin-bottom:4px; display:block; }
+.ws-context select { background:#f6f8fc; border:1px solid #e4eaf4; border-radius:10px; padding:9px 12px; color:#3a5071; }
+.ws-account { gap:14px; }
+.ws-account-name { display:flex; align-items:center; gap:9px; font-size:12px; color:#425672!important; background:none!important; padding:0!important; }
+.ws-account-initial { display:grid; place-items:center; width:35px; height:35px; background:var(--ui-soft); color:var(--ui-accent); border-radius:12px; font-size:12px; font-weight:700; }
+.ws-notification-link { width:36px; height:36px; display:grid; place-items:center; color:#657b9b!important; background:#f5f8fd; border-radius:11px; }
+.ws-account .ws-link { font-size:11px; color:#7c8ca4; }
+.ws-standalone-main { max-width:960px; padding-top:42px; }
+.ws-security-top { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:19px 22px; background:linear-gradient(100deg,#e8f3ff,#f4eeff); border:1px solid #e1e7f5; border-radius:16px; margin-bottom:23px; }
+.ws-security-top h2 { margin:0 0 4px; font-size:15px; }
+.ws-security-top p { margin:0; font-size:12px; color:#667c9b; }
+/* Match retained Bootstrap administration and sign-in forms without changing JS. */
+.lm-auth__card { border:1px solid #e6eaf2; border-radius:22px; box-shadow:0 15px 50px #273d6810; }
+.form-group label, .col-form-label { color:#405574; font-size:12px; font-weight:600; }
+.form-control { border:1px solid #dce4ef; border-radius:10px; min-height:44px; padding:10px 13px; color:#25374f; background:#fff; font-size:13px; box-shadow:0 1px 2px #1a324e03; }
+.form-control:focus { border-color:#4d91ed; box-shadow:0 0 0 3px #247cf017; }
+.form-control.form-control-lg { min-height:47px; font-size:14px; border-radius:11px; }
+textarea.form-control { min-height:120px; line-height:1.65; }
+select.form-control { padding-right:30px; }
+.form-group { margin-bottom:21px; }
+.card { border-radius:17px; border:1px solid #e4eaf3; box-shadow:0 4px 18px #263f6805; }
+.card .card-body { padding:25px; }
+.select2-container--default .select2-selection--single { min-height:44px; border:1px solid #dce4ef; border-radius:10px; }
+.select2-container--default .select2-selection--single .select2-selection__rendered { line-height:42px; padding-left:13px; font-size:13px; }
+.select2-container--default .select2-selection--single .select2-selection__arrow { height:42px; right:8px; }
+@media(min-width:1500px) { .ws-main { padding-top:36px; } .ws-card { padding:27px; } }
+@media(max-width:1150px) {
+    .ws-sidebar { width:210px; padding:25px 13px; } .ws-shell { margin-left:210px; }
+    .ws-main { padding:28px 24px; } .ws-topbar { padding:15px 24px; }
+    .ws-profile-grid { grid-template-columns:minmax(0,1.5fr) minmax(250px,1fr); gap:18px; }
+    .ws-profile-grid > .ws-card { padding:22px; } .ws-people-grid { gap:18px; }
+}
+@media(max-width:1000px) { .ws-profile-grid { grid-template-columns:1fr; gap:0; } .ws-people-grid { grid-template-columns:1fr; gap:20px; } .ws-people-grid > .ws-card { height:auto; } }
+@media(max-width:800px) {
+    .ws-sidebar { width:auto; padding:17px 20px; } .ws-shell { margin-left:0; }
+    .ws-sidebar nav a { font-size:11px; padding:7px 10px; } .ws-main { padding:25px 18px 85px; }
+    .ws-topbar { padding:14px 18px; gap:12px; } .ws-context select { font-size:10px; padding:9px; }
+    .ws-account { flex-direction:row; gap:9px; flex-wrap:wrap; justify-content:flex-end; max-width:125px; }
+    .ws-account-name > span:last-child { display:none; } .ws-account-initial { width:31px; height:31px; border-radius:10px; }
+    .ws-notification-link { width:31px; height:31px; } .ws-account .ws-link { font-size:10px; }
+    .ws-card { padding:21px; margin-bottom:19px; border-radius:16px; }
+    .ws-page-heading h1 { font-size:25px; } .ws-page-heading p { font-size:12px; }
+    .ws-profile-banner { padding:19px; gap:13px; flex-wrap:wrap; border-radius:16px; }
+    .ws-profile-banner h2 { font-size:17px; } .ws-profile-avatar { width:53px; height:53px; flex-basis:53px; border-radius:16px; font-size:19px; }
+    .ws-profile-banner .ws-role-pill { margin-left:66px; margin-top:-3px; }
+    .ws-stat { min-height:112px; } .ws-stat > .ws-stat-icon { width:40px; flex-basis:40px; height:51px; border-radius:12px; }
+    .ws-section-heading { gap:11px; margin-bottom:22px; } .ws-section-icon { width:38px; height:38px; flex-basis:38px; border-radius:12px; font-size:16px; }
+    .ws-section-heading h2 { font-size:15px; } .ws-section-heading p { font-size:11px; }
+    .ws-security-top { align-items:flex-start; flex-direction:column; } .ws-security-top .ws-btn { width:100%; }
+    .ws-standalone-main { padding-top:28px; }
+}
+@media(max-width:560px) {
+    .ws-form-grid, .ws-field-row { grid-template-columns:minmax(0,1fr); gap:18px; }
+    .ws-form-actions { justify-content:stretch; flex-direction:column-reverse; gap:16px; padding-top:9px; }
+    .ws-form-actions .ws-btn { width:100%; } .ws-form :is(input,select,textarea) { font-size:16px; }
+    .ws-form .ws-btn { max-width:100%; } .ws-profile-banner > div:nth-child(2) { min-width:0; flex:1; }
+    .ws-profile-banner p { font-size:11px; } .ws-role-pill { white-space:normal; }
+}
+@media(prefers-reduced-motion:reduce) { .ws-body * { transition:none!important; } }
+.ws-security-columns { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:24px; align-items:start; }
+.ws-security-columns > * { min-width:0; }
+.ws-secret-key { padding:15px; border-radius:11px; background:#f3f5fc; overflow-wrap:anywhere; font-size:13px; letter-spacing:1px; }
+.ws-device-name { overflow-wrap:anywhere; }
+.ws-recovery-codes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:0; list-style:none; }
+.ws-recovery-codes li { padding:12px; border:1px solid #e6eaf3; border-radius:9px; background:#f8faff; overflow-wrap:anywhere; font-size:12px; }
+.ws-people-grid fieldset { margin-top:17px; }
+.ws-badge[data-state="revoked"], .ws-badge[data-state="inactive"] { background:#eef0f5; color:#6a768c; }
+@media(max-width:800px) { .ws-security-columns { grid-template-columns:minmax(0,1fr); gap:0; } }
+@media(max-width:400px) { .ws-recovery-codes { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:800px) {
+    .ws-profile-banner { display:grid; grid-template-columns:53px minmax(0,1fr); column-gap:13px; row-gap:8px; }
+    .ws-profile-banner .ws-profile-avatar { grid-row:1/3; }
+    .ws-profile-banner > div:nth-child(2) { grid-column:2; }
+    .ws-profile-banner .ws-role-pill { grid-column:2; margin:0; justify-self:start; max-width:100%; }
+}
+.ws-people-grid > .ws-card { display:flex; flex-direction:column; }
+.ws-people-grid > .ws-card > .ws-form { display:flex; flex-direction:column; flex:1; }
+.ws-people-grid > .ws-card .ws-form-actions { margin-top:auto; }
+/* Side panels keep dates and contact pickers comfortably readable. */
+.ws-grid > .ws-card .ws-form-grid { grid-template-columns:minmax(0,1fr); }

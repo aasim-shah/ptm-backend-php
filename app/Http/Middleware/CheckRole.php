@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Admin panel gate: only Super Admin and Principal users may use the web panel.
+ * Legacy global management gate. School and district administrators use scoped workspace routes.
  */
 class CheckRole
 {
@@ -18,7 +18,7 @@ class CheckRole
             return redirect()->route('login');
         }
 
-        if (!$user->hasAnyRole(['Super Admin', 'Principal'])) {
+        if (!(int) $user->status || !$user->email_verified_at || !$user->hasRole('Super Admin')) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

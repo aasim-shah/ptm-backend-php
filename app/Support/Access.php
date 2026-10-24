@@ -16,7 +16,13 @@ class Access
 {
     public static function isPrincipal(User $user): bool
     {
-        return $user->type === 'Principal' || $user->hasRole('Principal');
+        return $user->hasRole('Principal');
+    }
+
+    public static function principalOwnsClass(User $user, $classId): bool
+    {
+        return self::isPrincipal($user) && ClassSection::where('class_id', $classId)
+            ->whereHas('class.school', function ($query) use ($user) { $query->where('principal_id', $user->id); })->exists();
     }
 
     /**
@@ -35,13 +41,14 @@ class Access
      */
     public static function canViewStudent(User $user, $studentUserId): bool
     {
-        if (self::isPrincipal($user)) {
-            return true;
-        }
-
         $student = Students::where('user_id', $studentUserId)->first();
         if (!$student) {
             return false;
+        }
+
+        if (self::isPrincipal($user)) {
+            return $student->class_section_id && ClassSection::where('id', $student->class_section_id)
+                ->whereHas('class.school', function ($query) use ($user) { $query->where('principal_id', $user->id); })->exists();
         }
 
         if ((int) $student->user_id === (int) $user->id) {

@@ -42,7 +42,7 @@ class TeacherController extends Controller
 
     public function reportCount(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -97,7 +97,7 @@ class TeacherController extends Controller
 
     public function ClassReportCount(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -173,7 +173,7 @@ class TeacherController extends Controller
     }
     public function ClassSubjectReportCount(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -221,7 +221,7 @@ class TeacherController extends Controller
     }
     public function createExam(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -278,7 +278,7 @@ class TeacherController extends Controller
 
     public function timetable(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -420,7 +420,7 @@ class TeacherController extends Controller
 
     public function addStudentReport(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }
@@ -671,7 +671,7 @@ class TeacherController extends Controller
     public function deleteStudentReport(Request $request, $id){
 
         $classQuarter = ClassQuarter::where('id',$id)->first();
-        if ($classQuarter && !Access::isPrincipal($request->user())
+        if ($classQuarter && !Access::principalOwnsClass($request->user(), $classQuarter->class_id)
             && !Access::teacherOwnsClass($request->user(), $classQuarter->class_id)) {
             return Access::forbidden();
         }
@@ -714,7 +714,7 @@ class TeacherController extends Controller
 
     public function editStudentReport(Request $request)
     {
-        if ($request->class_id && !Access::isPrincipal($request->user())
+        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
         }

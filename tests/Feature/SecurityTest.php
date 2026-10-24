@@ -75,7 +75,7 @@ class SecurityTest extends TestCase
         $this->makeUser('admin', 'Super Admin', 'boss@example.com');
 
         $this->post('/login-web', ['email' => 'boss@example.com', 'password' => 'secret123'])
-            ->assertRedirect(route('home'));
+            ->assertRedirect(route('workspace.home'));
         $this->get('/home')->assertOk();
     }
 
