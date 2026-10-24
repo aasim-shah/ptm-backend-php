@@ -288,7 +288,7 @@ class AuthController extends Controller
             $hasSchool = UserSchools::where('user_id',$user->id)->first();
             $user->has_schools = (bool)$hasSchool;
 
-            if($user && !$user->email_verified_at){
+            if($user && !$user->email_verified_at && config('ptm.require_email_verification')){
 
                 try{
                     $otp= Utility::getOtp();
