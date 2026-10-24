@@ -278,7 +278,7 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->with('rate')->first();
 
-            if($user && !$user->email_verified_at){
+            if($user && !$user->email_verified_at && config('ptm.require_email_verification')){
 
                 try{
                     $otp= Utility::getOtp();
