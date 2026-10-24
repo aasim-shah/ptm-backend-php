@@ -347,3 +347,17 @@ Route::post('set-password', [ApiController::class, 'changePasswordAfterOtp'])->m
 Route::group(['middleware' => ['auth:sanctum',]], function () {
     Route::post('change-password', [ApiController::class, 'changePassword']);
 });
+
+// Additive workspace contracts. Existing mobile endpoints keep their response shapes.
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('me/workspaces', [\App\Http\Controllers\Workspace\DashboardController::class, 'workspaces']);
+    Route::get('dashboard', [\App\Http\Controllers\Workspace\DashboardController::class, 'index']);
+});
+
+Route::post('security/mfa/challenge', [\App\Http\Controllers\Security\SecurityController::class, 'tokenChallenge'])->middleware(['auth:sanctum', 'throttle:5,1']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('workspace/notifications', [\App\Http\Controllers\Workspace\NotificationsController::class, 'index']);
+    Route::post('workspace/notifications/{id}/read', [\App\Http\Controllers\Workspace\NotificationsController::class, 'read']);
+    Route::post('workspace/devices', [\App\Http\Controllers\Workspace\NotificationsController::class, 'device'])->middleware('throttle:30,1');
+});

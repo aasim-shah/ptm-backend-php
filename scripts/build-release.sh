@@ -3,7 +3,7 @@
 #
 #   bash scripts/build-release.sh            # -> build/release.zip
 #
-# Requires PHP 8.1+ with composer, and Node 18+ with npm.
+# Requires PHP 8.2+ with composer, and Node 22+ with npm.
 # Secrets (.env, Firebase service account) are NOT packaged; they live on the server.
 set -euo pipefail
 cd "$(dirname "$0")/.."

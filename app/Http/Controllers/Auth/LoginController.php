@@ -69,14 +69,16 @@ class LoginController extends Controller
         }
 
         $user = Auth::user();
-        if ($user->hasAnyRole(['Super Admin', 'Principal'])) {
+        if ((int) $user->status && $user->email_verified_at &&
+            count(app(\App\Services\WorkspaceAccess::class)->webContexts($user))) {
             $request->session()->regenerate();
+            $request->session()->put('account_session_version', app(\App\Services\Security\AccountSecurity::class)->state($user)->session_version ?? 1);
             $user->timezone_offset = $request->timezone_offset;
             $user->save();
-            return redirect(route('home'));
+            return redirect()->route('workspace.home');
         }
         $response = array(
-            'message' => trans('no_permission_message')
+            'message' => 'Use the mobile app. Web access is limited to administrators and explicitly authorized staff.'
         );
 
         Auth::logout();

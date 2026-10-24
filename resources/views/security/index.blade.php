@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Account security · Parent Teacher Mobile</title>
+<link rel="stylesheet" href="{{ asset('assets/fonts/font-awesome.min.css') }}"><link rel="stylesheet" href="{{ asset('assets/css/lumen-theme.css') }}"><link rel="stylesheet" href="{{ asset('assets/css/workspaces.css') }}"><link rel="stylesheet" href="{{ asset('assets/css/colourful-portals.css') }}"><link rel="stylesheet" href="{{ asset('assets/css/portal-ui.css') }}?v={{ filemtime(public_path('assets/css/portal-ui.css')) }}">
+</head><body class="ws-body"><main class="ws-main ws-standalone-main">
+<header class="ws-page-heading"><div><p class="ws-eyebrow">YOUR ACCOUNT / SECURITY</p><h1>A little extra peace of mind.</h1><p>Protect your account and keep track of where you’re signed in.</p></div><form method="post" action="{{ route('workspace.logout') }}">@csrf<button class="ws-link">Sign out</button></form></header>
+@if($errors->any())<div class="ws-alert ws-error" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
+@if(session('security_success'))<div class="ws-alert ws-success" role="status">{{ session('security_success') }}</div>@endif
+@if(config('security.allow_review_skip') && !$state?->enabled_at)
+<section class="ws-security-top"><div><h2>Your school day is waiting.</h2><p>You can set up your authenticator later.</p></div><form method="post" action="{{ route('security.skip') }}">@csrf<button type="submit" class="ws-btn">Skip to dashboard <span aria-hidden="true">→</span></button></form></section>
+@endif
+@if(session('recovery_codes'))<section class="ws-card">@include('workspace.form-heading',['icon'=>'key','tone'=>'orange','title'=>'Save your recovery codes','description'=>'Each code works once. Keep them in a secure password manager.'])<ul class="ws-recovery-codes">@foreach(session('recovery_codes') as $code)<li><code>{{ $code }}</code></li>@endforeach</ul></section>@endif
+<div class="ws-security-columns"><div>
+<section class="ws-card">
+    @include('workspace.form-heading',['icon'=>'shield','tone'=>'purple','title'=>'Authenticator protection','description'=>auth()->user()->email])
+    @if($required)<p class="ws-form-note">Verify your authenticator before continuing. Administrator accounts require MFA in production.</p>@endif
+    @if($state?->enabled_at)
+        <form method="post" action="{{ route('security.challenge') }}" class="ws-form">@csrf<label>Authenticator or recovery code<input name="code" required maxlength="20" autocomplete="one-time-code" placeholder="Enter your code"></label><div class="ws-form-actions"><button class="ws-btn">Verify and continue <span aria-hidden="true">→</span></button></div></form>
+    @elseif($secret)
+        <p>Add a time-based account in your authenticator app using this key. Choose SHA-1, 6 digits and a 30-second interval.</p><p class="ws-secret-key"><code>{{ $secret }}</code></p><form method="post" action="{{ route('security.confirm') }}" class="ws-form">@csrf<label>Six-digit code<input name="code" required inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="000000"></label><div class="ws-form-actions"><button class="ws-btn">Enable authenticator</button></div></form>
+    @else
+        <p>Add an authenticator app for an extra layer of account protection. You’ll receive recovery codes after setup.</p><form method="post" action="{{ route('security.begin') }}" class="ws-form">@csrf<label>Current password<input type="password" name="current_password" required autocomplete="current-password" placeholder="Enter your password"></label><div class="ws-form-actions"><button class="ws-btn">Set up authenticator <span aria-hidden="true">→</span></button></div></form>
+    @endif
+</section>
+<section class="ws-card">@include('workspace.form-heading',['icon'=>'sign-out','tone'=>'pink','title'=>'Sign out other devices','description'=>'Keep your current browser and revoke other sessions and API tokens.'])<form method="post" action="{{ route('security.revoke-others') }}" class="ws-form">@csrf<label>Current password<input type="password" name="current_password" required autocomplete="current-password" placeholder="Confirm your password"></label><div class="ws-form-actions"><button class="ws-btn ws-btn-secondary">Sign out other devices</button></div></form></section>
+</div><section class="ws-card">@include('workspace.form-heading',['icon'=>'desktop','tone'=>'blue','title'=>'Your browser sessions','description'=>'Recognize a device? Check when it was last active.'])
+@forelse($sessions as $device)<article class="ws-notice"><span class="ws-role-pill">{{ $device->session_hash === $currentHash ? 'This browser' : 'Other browser' }}</span><p class="ws-device-name">{{ $device->device }}</p><p class="ws-field-hint">Last active: {{ $device->last_seen_at }} UTC</p><details><summary>Revoke this session</summary><form method="post" action="{{ route('security.revoke', $device->id) }}" class="ws-form">@csrf<label>Current password<input name="current_password" type="password" required autocomplete="current-password"></label><div class="ws-form-actions"><button class="ws-btn ws-btn-secondary">Revoke session</button></div></form></details></article>@empty<p class="ws-empty-line">Your tracked browser sessions will appear here.</p>@endforelse
+</section></div><a href="{{ route('workspace.home') }}">Back to dashboard <span aria-hidden="true">→</span></a>
+</main></body></html>

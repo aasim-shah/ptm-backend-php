@@ -21,6 +21,7 @@
 # Secrets and environment files: configure these on the server only
 /.env
 /.env.*
+/secrets/
 *firebase-adminsdk*.json
 /storage/app/firebase/
 
@@ -57,3 +58,11 @@ error_log
 /public/js/*.map
 /public/css/*.map
 /.phpunit.result.cache
+
+# Local dashboard design/verification artifacts and development fixtures
+/.superdesign/
+/.playwright-mcp/
+/database/seeders/WorkspaceDemoSeeder.php
+
+# Runtime uploads, quarantine, backups and private evidence never belong in an image/archive
+/storage/app/*

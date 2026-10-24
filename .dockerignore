@@ -11,6 +11,13 @@ tests
 .env
 .env.*
 !.env.example
+secrets
+source.tar.gz
+build.log
+build.exit
+prepare.py
+backup-path
+restore.log
 *firebase-adminsdk*.json
 storage/app/firebase
 storage/logs/*
@@ -41,3 +48,10 @@ vite.config.js
 cmd.sh
 public/vendor/wizard-installer
 resources/views/vendor/installer
+
+.superdesign
+.playwright-mcp
+database/seeders/WorkspaceDemoSeeder.php
+
+# Runtime uploads, quarantine, backups and private evidence never belong in an image/archive
+storage/app

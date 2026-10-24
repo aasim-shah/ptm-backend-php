@@ -185,7 +185,7 @@ return [
          App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
-        LaravelFCM\FCMServiceProvider::class,
+
 
 
     ],
@@ -206,8 +206,8 @@ return [
         'Excel' => Maatwebsite\Excel\Facades\Excel::class,
         'Image' => \Intervention\Image\Facades\Image::class,
         'PDF'       => Barryvdh\DomPDF\Facade\Pdf::class,
-        'FCM'      => LaravelFCM\Facades\FCM::class,
-        'FCMGroup' => LaravelFCM\Facades\FCMGroup::class
+        'Form' => \App\Support\Facades\Form::class,
+
     ])->toArray(),
 
 ];

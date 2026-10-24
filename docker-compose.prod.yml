@@ -30,7 +30,71 @@ services:
       - ./.env.production:/var/www/html/.env
       - ptm-storage:/var/www/html/storage/app
       - ptm-logs:/var/www/html/storage/logs
+      - clamav-data:/var/lib/clamav:ro
       - ./secrets/firebase-service-account.json:/var/www/html/storage/app/firebase/service-account.json:ro
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1/health/live') ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    networks:
+      - ptm
+
+  worker:
+    image: ptm-backend:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/worker-entrypoint.sh"]
+    command: ["php", "artisan", "queue:work", "workspace", "--queue=workspace", "--sleep=3", "--timeout=120", "--max-time=3600"]
+    volumes:
+      - ./.env.production:/var/www/html/.env:ro
+      - ptm-storage:/var/www/html/storage/app
+      - ptm-logs:/var/www/html/storage/logs
+      - clamav-data:/var/lib/clamav:ro
+      - ./secrets/firebase-service-account.json:/var/www/html/storage/app/firebase/service-account.json:ro
+    healthcheck:
+      test: ["CMD", "php", "artisan", "workspace:health", "--component=worker"]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    networks:
+      - ptm
+
+  scheduler:
+    image: ptm-backend:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/worker-entrypoint.sh"]
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - ./.env.production:/var/www/html/.env:ro
+      - ptm-storage:/var/www/html/storage/app
+      - ptm-logs:/var/www/html/storage/logs
+    healthcheck:
+      test: ["CMD", "php", "artisan", "workspace:health", "--component=scheduler"]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    networks:
+      - ptm
+
+  malware-definitions:
+    image: ptm-backend:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["freshclam"]
+    command: ["--daemon", "--foreground", "--stdout"]
+    volumes:
+      - clamav-data:/var/lib/clamav
     networks:
       - ptm
 
@@ -53,6 +117,7 @@ volumes:
   ptm-storage:
   ptm-logs:
   ptm-mysql:
+  clamav-data:
 
 networks:
   ptm:

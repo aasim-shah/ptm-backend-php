@@ -19,11 +19,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Kreait\Firebase\Factory;
-use LaravelFCM\Facades\FCM;
-use LaravelFCM\Message\OptionsBuilder;
-use LaravelFCM\Message\PayloadDataBuilder;
-use LaravelFCM\Message\PayloadNotificationBuilder;
-use LaravelFCM\Message\Topics;
 
 class ChatController extends Controller
 {

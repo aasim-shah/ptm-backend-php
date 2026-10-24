@@ -1,16 +1,16 @@
 # Deployment Guide
 
-Production deployment of the School System backend (Laravel 9 API for the Parent Teacher Mobile app + Blade admin panel).
+Production deployment of the School System backend (Laravel 12 API for the Parent Teacher Mobile app + Blade admin panel).
 
 ## 1. Server requirements
 
 | Item | Requirement |
 |---|---|
-| PHP | 8.1 or 8.2, with `pdo_mysql`, `mbstring`, `openssl`, `curl`, `zip`, `gd`, `intl`, `bcmath`, `fileinfo`, `tokenizer`, `xml` |
+| PHP | 8.2 or newer, with `pdo_mysql`, `mbstring`, `openssl`, `curl`, `zip`, `gd`, `intl`, `bcmath`, `fileinfo`, `tokenizer`, `xml` |
 | PHP `grpc` extension | Required for Firestore chat (`pecl install grpc`). Without it chat calls fail; everything else works. |
 | MySQL | 8.0 |
 | Web server | Apache or Nginx with the **document root set to `<app>/public`** |
-| Build machine / CI | Composer 2, Node 18+, npm |
+| Build machine / CI | Composer 2, Node 22+, npm |
 
 > **Document root must be `public/`.** If the domain points at the project root, `.env`, logs and the Firebase key become downloadable.
 
@@ -123,3 +123,45 @@ docker exec ptm-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" ptm' > pt
 ```
 
 **Moving to a domain with HTTPS:** point the domain's DNS at the server, then in the Caddyfile replace `http://2.25.103.51` with the domain name (Caddy issues the certificate automatically). Set `APP_URL=https://<domain>` in `.env.production`, run `caddy validate --config /etc/caddy/Caddyfile` and `systemctl reload caddy`, then restart the app with `up -d`.
+
+
+## 8. Workspace upgrade deployment — 20 October 2026
+
+The upgraded stack is staged at `/root/ptm-candidate`, using Compose project `ptm-candidate`, image `ptm-backend:candidate` and loopback port 8091. The cutover switches only the existing IP site's Caddy upstream from port 8090 to 8091. Other hosted services remain outside this deployment. The original `/root/ptm-backend` stack and its original database remain separate for rollback; do not run the old `git pull` instructions expecting them to update the upgraded stack.
+
+The upgraded stack uses separate MySQL, application storage, logs and antivirus-definition volumes. It preserves the source database/accounts and application encryption key. Real provider transactions are not part of deployment testing. Workspace email/push sends stay disabled until staging provider acceptance. The image retains `WITH_GRPC=0`, matching the previous host build; legacy Firestore chat still needs the gRPC extension before acceptance.
+
+The IP address remains HTTP at the owner's request. Its deployment override sets `SESSION_SECURE_COOKIE=false` so browsers can sign in, while HttpOnly, SameSite, encrypted sessions and administrator MFA remain enabled. Restore secure cookies when TLS is configured. This is a temporary review deployment and does not satisfy production launch gates.
+
+Useful commands on the server:
+
+```bash
+cd /root/ptm-candidate
+docker compose -f docker-compose.prod.yml --env-file .env.compose ps
+docker compose -f docker-compose.prod.yml --env-file .env.compose exec -T app php artisan workspace:health
+docker compose -f docker-compose.prod.yml --env-file .env.compose exec -T app php artisan workspace:readiness --production --json
+```
+
+Root-only backups and deployment checks are under `/root/ptm-deploy-backups`. `active-release-backup` in the upgraded deployment identifies the final cutover snapshot after successful promotion. Snapshot artifacts contain sensitive application data and must not be published or committed.
+
+For a rollback after users have started writing to the upgraded site, first preserve its database/uploads and reconcile those writes. Do not blindly redirect to the original database and lose new activity. During the initial cutover, the deployment script automatically restores the original route and releases original maintenance mode if its checks fail.
+
+## 9. Four administrative panels redeployment — 21 October 2026
+
+The active review portal is http://2.25.103.51/login on the existing `/root/ptm-candidate` stack and loopback port 8091. The current `ptm-backend:candidate` image includes Super Admin, Sub-Super Admin, District Admin and School Admin contexts. Parent/Teacher browser workspaces are denied; Staff needs an explicit `web.access` membership permission. School administration uses the scoped workspace instead of the legacy Principal management surface.
+
+The final deployment backup is `/root/ptm-deploy-backups/20261021T055943Z-four-panels`; `active-release-backup` points to it. It contains the pre-update database, uploads, environment/Compose configuration, source archive and rollback-image reference. The new administrative-request migration is additive. Do not restore an old database over later user activity during an application rollback.
+
+Deployment smoke checks passed for all four roles and MFA, authorized/unauthorized Staff, mobile API preservation and Parent/Teacher browser denial. App, worker and scheduler are healthy. Public login is HTTP 200; public `/.env` is HTTP 404. Root-only verification logs and review-account credentials remain under `/root/ptm-deploy-backups`; no development seeder was run on the server.
+
+See [feature status and deployment evidence](client-feedback-architecture.md) for remaining integration and acceptance gaps. The existing temporary review settings and provider configuration were preserved.
+
+## 10. Pulled backend update — 21 October 2026
+
+Pulled `origin/main` commit `7db0c64` and preserved the existing four-panel workspace/security implementation. The pre-pull local work is also retained in the Git stash named `Preserve deployed four-panel work before pulling backend 7db0c64`. One AuthController merge conflict was resolved by retaining inactive-account rejection alongside the new login response. Registration's trial-day configuration is cast to an integer for Carbon 3 compatibility. The upstream role-context test fixture explicitly marks its account active.
+
+Combined verification: **81 tests, 454 assertions passed**; route-cache build/clear, Blade compilation, merged PHP syntax and whitespace checks passed. The role-context tables, legacy-link backfill and call-usage-ledger migrations ran on the hosted database. The deployed context-switch route is registered and role-request APIs require authentication.
+
+The active `/root/ptm-candidate` stack was updated with image `sha256:0744aa8c2912cbfb667e482f039d8fada87fa0a1febeec1a5986ae85c420a396`. Final database/uploads/configuration/source backup: `/root/ptm-deploy-backups/20261021T073113Z-four-panels`. Promotion log: `/root/ptm-deploy-backups/backend-7db0c64-promote.log`.
+
+Hosted smoke checks passed for all four admin roles and MFA, explicitly authorized Staff web access, Parent/Teacher/unauthorized Staff web denial, and retained mobile workspace API access. Existing hosted admin-review credentials were rechecked and preserved. App, queue worker and scheduler are healthy; public readiness returns `ready`. Temporary smoke users were removed. No provider financial transaction or live video call was performed.

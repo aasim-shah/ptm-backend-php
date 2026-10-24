@@ -2,376 +2,293 @@
 @section('title')
 {{__('dashboard')}}
 @endsection
-<style>
-    .description{
-        padding-bottom: 0 !important;
-        overflow: hidden;
-        border-bottom: 0;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
+
+@php
+    $hour = (int) now()->format('G');
+    $greeting = $hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening');
+    $authUser = auth()->user();
+
+    // Stat cards: only the counts this role receives from the controller are shown.
+    $stats = [];
+    if (isset($parent)) {
+        $stats[] = ['label' => 'Parents', 'caption' => 'Total parents / guardians', 'value' => $parent, 'icon' => 'fa-users', 'tint' => 'pink',
+            'url' => $authUser->can('parents-create') ? route('parents.index') : null];
     }
-    .table-bordered td {
-        border-bottom: 0px !important;
+    if (isset($teacher)) {
+        $stats[] = ['label' => 'Teachers', 'caption' => 'Total teachers', 'value' => $teacher, 'icon' => 'fa-id-badge', 'tint' => 'blue',
+            'url' => $authUser->can('teacher-create') ? route('teachers.index') : null];
+    }
+    if (isset($student)) {
+        $stats[] = ['label' => 'Students', 'caption' => 'Total students', 'value' => $student, 'icon' => 'fa-graduation-cap', 'tint' => 'green',
+            'url' => $authUser->canany(['student-list', 'class-teacher']) ? route('students.index') : null];
+    }
+    if (isset($schoolsCount)) {
+        $stats[] = ['label' => 'Schools', 'caption' => 'Total schools', 'value' => $schoolsCount, 'icon' => 'fa-university', 'tint' => 'orange',
+            'url' => $authUser->hasRole('Super Admin') ? route('school.index') : null];
     }
 
-</style>
+    // Shortcuts to existing admin pages, filtered by the same checks the sidebar uses.
+    $canAnnounce = $authUser->can('announcement-create');
+    $actions = [];
+    if ($authUser->hasRole('Super Admin')) {
+        $actions[] = ['title' => 'Add a school', 'text' => 'Register a new school', 'icon' => 'fa-university', 'tint' => 'orange', 'url' => route('school.index')];
+    }
+    if ($authUser->canany(['create-principal', 'principal-list'])) {
+        $actions[] = ['title' => 'Add a principal', 'text' => 'Invite a school leader', 'icon' => 'fa-user-circle', 'tint' => 'indigo', 'url' => route('principal.index')];
+    }
+    if ($canAnnounce) {
+        $actions[] = ['title' => 'New announcement', 'text' => 'Post to the noticeboard', 'icon' => 'fa-bullhorn', 'tint' => 'blue', 'url' => route('announcement.index')];
+    }
+    if ($authUser->hasAnyRole(['Super Admin', 'Principal'])) {
+        $actions[] = ['title' => 'Send a notification', 'text' => 'Push a message to the app', 'icon' => 'fa-bell', 'tint' => 'pink', 'url' => route('push-notifications')];
+    }
+    if ($authUser->can('parents-create')) {
+        $actions[] = ['title' => 'Export parents', 'text' => 'Download the parent list', 'icon' => 'fa-file-excel-o', 'tint' => 'green', 'url' => route('parents.index')];
+    }
+
+    $teacherList = $teachers ?? collect();
+    $teacherPreview = $teacherList->take(6);
+    $hasGender = $boys || $girls;
+@endphp
+
 @section('content')
-<div class="content-wrapper">
-    <div class="page-header">
-        <h3 class="page-title">
-            <span class="page-title-icon text-white mr-2 cloud-blue">
-                <i class="fa fa-home"></i>
-            </span> {{__('dashboard')}}
-        </h3>
-    </div>
-    @hasrole(['Principal'])
-    <div class="row">
-        @if(isset($parent))
-        <div class="col-md-4 stretch-card grid-margin p-1">
-            <div class="card bg-gradient-warning card-img-holder text-white p-0">
-                <div class="card-body p-0">
-                    <table class="w-100">
-                        <tr>
-                            <td class="text-center">
-                                <img src="{{asset(config('global.PARENTS_IMAGE')) }}" style="top: 50%;right: 20px" width="100px" height="100px" alt="circle-image"/>
-                            </td>
-                            <td>
+<div class="content-wrapper lm-dashboard">
 
-                                <h4 class="font-weight-normal mb-2 mt-4">{{__('total_parents')}}<i class="mdi mdi-diamond mdi-24px float-right"></i>
-                                </h4>
-                                <h2 class="mb-5">{{$parent}}</h2>
-                            </td>
-                        </tr>
-                    </table>
-                    <img src="{{asset(config('global.CIRCLE_SVG')) }}" class="card-img-absolute" alt="circle-image"/>
-
-                </div>
-            </div>
+    {{-- Welcome banner --}}
+    <header class="lm-welcome">
+        <div class="lm-welcome__text">
+            <p class="lm-welcome__eyebrow">Welcome back,</p>
+            <h1 class="lm-welcome__title">{{ ucwords(trim($authUser->first_name.' '.$authUser->last_name)) }}!</h1>
+            <p class="lm-welcome__sub">Here’s what’s happening across Parent Teacher Mobile today.</p>
         </div>
-        @endif
-        @if(isset($teacher))
-        <div class="col-md-4 stretch-card grid-margin p-1">
-            <div class="card bg-gradient-inner-green card-img-holder text-white p-0">
-                <div class="card-body p-0">
-
-                    <table class="w-100">
-                        <tr>
-                            <td class="text-center">
-                                <img src="{{asset(config('global.TEACHERS_IMAGE')) }}" style="top: 50%;right: 20px" width="100px" height="100px" alt="circle-image"/>
-                            </td>
-                            <td>
-
-                                <h4 class="font-weight-normal mb-2 mt-4">{{__('total_teachers')}}<i class="mdi mdi-chart-line mdi-24px float-right"></i>
-                                </h4>
-                                <h2 class="mb-5">{{$teacher}}</h2>
-                            </td>
-                        </tr>
-                    </table>
-
-                    <img src="{{asset(config('global.CIRCLE_SVG')) }}" class="card-img-absolute" alt="circle-image"/>
-
-                </div>
-            </div>
+        <p class="lm-welcome__tagline" aria-hidden="true">
+            <span>Together</span>
+            <span>Brighter Futures</span>
+            <i class="fa fa-heart-o"></i>
+        </p>
+        <div class="lm-welcome__art" aria-hidden="true">
+            @if(file_exists(public_path('assets/images/dashboard-hero.jpg')))
+                {{-- Drop a photo at public/assets/images/dashboard-hero.jpg to replace the illustration --}}
+                <img src="{{ asset('assets/images/dashboard-hero.jpg') }}" alt="">
+            @else
+                @include('workspace.hero-art')
+            @endif
         </div>
-        @endif
+    </header>
 
-        @if(isset($student))
-        <div class="col-md-4 stretch-card grid-margin p-1">
-            <div class="card bg-gradient-inner-pink card-img-holder text-white p-0">
-                <div class="card-body p-0">
-
-                    <table class="w-100">
-                        <tr>
-                            <td class="text-center">
-                                <img src="{{asset(config('global.STUDENTS_IMAGE')) }}" style="top: 50%;right: 20px" width="100px" height="100px" alt="circle-image"/>
-                            </td>
-                            <td>
-
-                                <h4 class="font-weight-normal mb-2 mt-4">{{__('total_students')}}<i class="mdi mdi-bookmark-outline mdi-24px float-right"></i>
-                                </h4>
-                                <h2 class="mb-5">{{$student}}</h2>
-                            </td>
-                        </tr>
-                    </table>
-                    <img src="{{asset(config('global.CIRCLE_SVG')) }}" class="card-img-absolute" alt="circle-image"/>
-
-                </div>
-            </div>
-        </div>
-        @endif
-
-    </div>
-    @endrole
-
-    @hasrole(['Super Admin'])
-    <div class="row">
-        @if(isset($parent))
-        <div class="col-md-3 stretch-card grid-margin p-1">
-            <div class="card bg-gradient-inner-yellow card-img-holder text-white p-0">
-                <div class="card-body p-0">
-
-                    <table class="w-100">
-                        <tr>
-                            <td class="text-center"> <img src="{{asset(config('global.PARENTS_IMAGE')) }}" style="top: 50%;right: 20px" width="95px" height="95px" alt="circle-image"/>
-                            </td>
-                            <td>
-                                <h4 class="font-weight-normal mb-2 mt-4">{{__('total_parents')}}
-                                </h4>
-                                <h2 class="mb-5">{{$parent}}</h2>
-                            </td>
-                        </tr>
-                    </table>
-
-                    <img src="{{asset(config('global.CIRCLE_SVG')) }}" class="card-img-absolute" alt="circle-image"/>
-
-                </div>
-            </div>
-        </div>
-        @endif
-        @if(isset($teacher))
-        <div class="col-md-3 stretch-card grid-margin  p-1">
-            <div class="card bg-gradient-danger card-img-holder text-white p-0">
-                <div class="card-body p-0">
-                    <table class="w-100">
-                        <tr>
-                            <td class="text-center">
-                                <img src="{{asset(config('global.TEACHERS_IMAGE')) }}" style="top: 50%;right: 20px" width="95px" height="95px" alt="circle-image"/>
-                            </td>
-                            <td>
-
-                                <h4 class="font-weight-normal mb-2 mt-4">{{__('total_teachers')}}<i class="mdi mdi-chart-line mdi-24px float-right"></i>
-                                </h4>
-                                <h2 class="mb-5">{{$teacher}}</h2>
-                            </td>
-                        </tr>
-                    </table>
-                    <img src="{{asset(config('global.CIRCLE_SVG')) }}" class="card-img-absolute" alt="circle-image"/>
-
-                </div>
-            </div>
-        </div>
-        @endif
-
-        @if(isset($student))
-        <div class="col-md-3 stretch-card grid-margin  p-1">
-            <div class="card bg-gradient-info card-img-holder text-white p-0">
-                <div class="card-body p-0">
-                    <table class="w-100">
-                        <tr>
-                            <td class="text-center">
-                                <img src="{{asset(config('global.STUDENTS_IMAGE')) }}" style="top: 50%;right: 20px" width="95px" height="95px" alt="circle-image"/>
-                            </td>
-                            <td>
-
-                                <h4 class="font-weight-normal mb-2 mt-4">{{__('total_students')}}<i class="mdi mdi-bookmark-outline mdi-24px float-right"></i>
-                                </h4>
-                                <h2 class="mb-5">{{$student}}</h2>
-                            </td>
-                        </tr>
-                    </table>
-
-
-                    <img src="{{asset(config('global.CIRCLE_SVG')) }}" class="card-img-absolute" alt="circle-image"/>
-
-                </div>
-            </div>
-        </div>
-        @endif
-
-        @if(isset($schoolsCount))
-        <div class="col-md-3 stretch-card grid-margin  p-1">
-            <div class="card bg-gradient-green card-img-holder text-white p-0">
-                <div class="card-body p-0">
-
-                    <table class="w-100">
-                        <tr>
-                            <td class="text-center">
-                                <img src="{{asset(config('global.SCHOOLS_IMAGE')) }}" style="top: 50%;right: 20px" width="95px" height="95px" alt="circle-image"/>
-                            </td>
-                            <td>
-
-                                <h4 class="font-weight-normal mb-2 mt-4">{{__('total_schools')}}<i class="mdi mdi-chart-line mdi-24px float-right"></i>
-                                </h4>
-                                <h2 class="mb-5">{{$schoolsCount}}</h2>
-                            </td>
-                        </tr>
-                    </table>
-                    <img src="{{asset(config('global.CIRCLE_SVG')) }}" class="card-img-absolute" alt="circle-image"/>
-
-                </div>
-            </div>
-        </div>
-        @endif
-
-    </div>
-    @endrole
-
-    <div class="row">
-        @if(isset($teachers) && !empty($teachers))
-        <div class="col-md-7 grid-margin stretch-card">
-            <div class="card">
-                <div class="card-body v-scroll">
-                    <h4 class="card-title">{{__('teacher')}}</h4>
-                    @foreach($teachers as $row)
-                    <div class="wrapper d-flex align-items-center py-2 border-bottom">
-                        @if(isset($row->user->image))
-                        <img class="img-sm rounded-circle" src="{{$row->user->image}}" alt="profile" onerror="onErrorImage(event)">
-                        @else
-                        <div style="width: 43px; height: 43px;"></div>
-                        @endif
-                        <div class="wrapper ml-3">
-                            <h6 class="ml-1 mb-1">@if(isset($row->user->first_name)){{$row->user->first_name.' '.$row->user->last_name}}@endif</h6>
-                            <small class="text-muted mb-0"><i class="mdi mdi-map-marker-outline mr-1"></i>@if(isset($row->qualification)){{$row->qualification}}@endif</small>
-                        </div>
-                        <div class="badge badge-pill badge-success ml-auto px-1 py-1">
-                            <i class="mdi mdi-check"></i>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-        @endif
-        @if($boys || $girls)
-        <div class="col-md-5 grid-margin stretch-card">
-            <div class="card">
-                <div class="card-body">
-                    <h4 class="card-title">{{__('student')}}'s {{__('gender')}}</h4>
-                    <canvas id="gender-ratio-chart"></canvas>
-                    <div id="gender-ratio-chart-legend" class="rounded-legend legend-vertical legend-bottom-left pt-4"></div>
-                </div>
-            </div>
-        </div>
-        @endif
-    </div>
-
-    @if($announcement)
-    <div class="row">
-        <div class="col-md-12 grid-margin stretch-card search-container">
-            <div class="card">
-                <div class="card-body">
-                    <h4 class="card-title">{{__('noticeboard')}}</h4>
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                            <tr>
-                                <th> {{__('no.')}}</th>
-                                <th> {{__('title')}}</th>
-                                <th> {{__('description')}}</th>
-                                @hasrole(['Super Admin'])
-                                <th> {{__('School')}}</th>
-                                @endrole
-                                <th> {{__('date')}}</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            @foreach($announcement as $key=>$row)
-                            <tr>
-                                <td>{{$key+1}}</td>
-                                <td>{{$row->title}}</td>
-                                <td class="description">{{$row->description}}</td>
-                                @hasrole(['Super Admin'])
-                                @if($row->school)
-                                <td>{{$row->school->school_name}}</td>
-                                @else
-                                <td>All Schools</td>
-                                @endif
-                                @endrole
-                                <td>{{$row->created_at_for_web}}</td>
-                            </tr>
-                            @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
+    {{-- Stats --}}
+    @if(count($stats))
+    <div class="lm-kpis lm-kpis--{{ count($stats) }}">
+        @foreach($stats as $stat)
+            @php $tag = $stat['url'] ? 'a' : 'div'; @endphp
+            <{{ $tag }} class="lm-kpi lm-kpi--{{ $stat['tint'] }}" @if($stat['url']) href="{{ $stat['url'] }}" @endif>
+                <span class="lm-kpi__icon"><i class="fa {{ $stat['icon'] }}"></i></span>
+                <span class="lm-kpi__body">
+                    <span class="lm-kpi__label">{{ $stat['label'] }}</span>
+                    <span class="lm-kpi__value">{{ number_format((int) $stat['value']) }}</span>
+                    <span class="lm-kpi__caption">{{ $stat['caption'] }}</span>
+                </span>
+            </{{ $tag }}>
+        @endforeach
     </div>
     @endif
+
+    <div class="lm-layout">
+        <div class="lm-layout__main">
+
+            {{-- Teachers --}}
+            @if(isset($teachers))
+            <section class="card lm-panel">
+                <div class="lm-panel__head">
+                    <div>
+                        <h4 class="lm-panel__title">{{ __('teacher') }}s <span class="lm-count">{{ $teacherList->count() }}</span></h4>
+                        <p class="lm-panel__sub">Active, verified teacher accounts</p>
+                    </div>
+                    @can('teacher-create')
+                        <a href="{{ route('teachers.index') }}" class="lm-panel__link">View all<i class="fa fa-angle-right"></i></a>
+                    @endcan
+                </div>
+                @if($teacherPreview->count())
+                    <ul class="lm-list">
+                        @foreach($teacherPreview as $row)
+                            @php
+                                $first = $row->user->first_name ?? '';
+                                $last = $row->user->last_name ?? '';
+                            @endphp
+                            <li class="lm-list__item">
+                                <span class="lm-avatar lm-avatar--lg">
+                                    {{ mb_substr($first, 0, 1) }}{{ mb_substr($last, 0, 1) }}
+                                    @if(!empty($row->user->image))
+                                        <img src="{{ $row->user->image }}" alt="" loading="lazy" onerror="this.remove()">
+                                    @endif
+                                </span>
+                                <span class="lm-list__text">
+                                    <span class="lm-list__title">{{ trim($first.' '.$last) }}</span>
+                                    <span class="lm-list__meta">{{ $row->qualification ?: 'No qualification listed' }}</span>
+                                </span>
+                                <span class="badge badge-success">Active</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                @else
+                    <div class="lm-empty lm-empty--compact">
+                        <span class="lm-empty__icon"><i class="fa fa-user"></i></span>
+                        <div>
+                            <p class="lm-empty__title">No teachers yet</p>
+                            <p class="lm-empty__text">Teachers appear here once they sign up and verify their email.</p>
+                        </div>
+                    </div>
+                @endif
+            </section>
+            @endif
+
+            {{-- Noticeboard --}}
+            <section class="card lm-panel">
+                <div class="lm-panel__head">
+                    <div>
+                        <h4 class="lm-panel__title">{{ __('noticeboard') }}</h4>
+                        <p class="lm-panel__sub">Latest announcements</p>
+                    </div>
+                    @if($canAnnounce)
+                        <a href="{{ route('announcement.index') }}" class="lm-panel__link">View all<i class="fa fa-angle-right"></i></a>
+                    @endif
+                </div>
+                @if(count($announcement))
+                    <ul class="lm-feed">
+                        @foreach($announcement as $row)
+                            <li class="lm-feed__item">
+                                <span class="lm-feed__icon lm-tint-indigo"><i class="fa fa-bullhorn"></i></span>
+                                <div class="lm-feed__body">
+                                    <div class="lm-feed__top">
+                                        <span class="lm-feed__title">{{ $row->title }}</span>
+                                        <span class="lm-feed__date">{{ $row->created_at_for_web }}</span>
+                                    </div>
+                                    <p class="lm-feed__text">{{ $row->description }}</p>
+                                    @hasrole(['Super Admin'])
+                                        <span class="badge {{ $row->school ? 'badge-secondary' : 'badge-primary' }}">
+                                            {{ $row->school ? $row->school->school_name : 'All schools' }}
+                                        </span>
+                                    @endrole
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                @else
+                    <div class="lm-empty lm-empty--compact">
+                        <span class="lm-empty__icon"><i class="fa fa-bullhorn"></i></span>
+                        <div>
+                            <p class="lm-empty__title">No announcements yet</p>
+                            <p class="lm-empty__text">Share news with parents and teachers across your schools.</p>
+                        </div>
+                        @if($canAnnounce)
+                            <a href="{{ route('announcement.index') }}" class="btn btn-light btn-sm ml-auto">Create one</a>
+                        @endif
+                    </div>
+                @endif
+            </section>
+        </div>
+
+        <aside class="lm-layout__side">
+
+            {{-- Quick actions --}}
+            @if(count($actions))
+            <section class="card lm-panel">
+                <div class="lm-panel__head">
+                    <div>
+                        <h4 class="lm-panel__title">Quick actions</h4>
+                        <p class="lm-panel__sub">Common tasks, one click away</p>
+                    </div>
+                </div>
+                <ul class="lm-actions">
+                    @foreach($actions as $action)
+                        <li>
+                            <a href="{{ $action['url'] }}" class="lm-action">
+                                <span class="lm-action__icon lm-tint-{{ $action['tint'] }}"><i class="fa {{ $action['icon'] }}"></i></span>
+                                <span class="lm-action__text">
+                                    <span class="lm-action__title">{{ $action['title'] }}</span>
+                                    <span class="lm-action__sub">{{ $action['text'] }}</span>
+                                </span>
+                                <i class="fa fa-angle-right lm-action__chev"></i>
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+            @endif
+
+            {{-- Student gender split --}}
+            <section class="card lm-panel">
+                <div class="lm-panel__head">
+                    <div>
+                        <h4 class="lm-panel__title">Students by gender</h4>
+                        <p class="lm-panel__sub">Share of enrolled students</p>
+                    </div>
+                </div>
+                @if($hasGender)
+                    <div class="lm-donut">
+                        <canvas id="gender-ratio-chart"></canvas>
+                        <div class="lm-donut__center">
+                            <span class="lm-donut__value">{{ number_format((int) $student) }}</span>
+                            <span class="lm-donut__label">{{ __('student') }}s</span>
+                        </div>
+                    </div>
+                    <ul class="lm-legend">
+                        <li><span class="lm-legend__dot" style="background:#5856D6"></span>{{ __('male') }}<span class="lm-legend__value">{{ $boys }}%</span></li>
+                        <li><span class="lm-legend__dot" style="background:#FF2D55"></span>{{ __('female') }}<span class="lm-legend__value">{{ $girls }}%</span></li>
+                    </ul>
+                @else
+                    <div class="lm-empty lm-empty--compact">
+                        <span class="lm-empty__icon"><i class="fa fa-pie-chart"></i></span>
+                        <div>
+                            <p class="lm-empty__title">No student data yet</p>
+                            <p class="lm-empty__text">The split appears once students are enrolled in a class.</p>
+                        </div>
+                    </div>
+                @endif
+            </section>
+        </aside>
+    </div>
 </div>
 @endsection
 @section('script')
-@if($boys || $girls)
+@if($hasGender)
 <script>
     (function ($) {
         'use strict';
         $(function () {
-            Chart.defaults.global.legend.labels.usePointStyle = true;
-            if ($("#gender-ratio-chart").length) {
-                let ctx = document.getElementById('gender-ratio-chart').getContext("2d")
-                let gradientStrokeBlue = ctx.createLinearGradient(0, 0, 0, 181);
-                gradientStrokeBlue.addColorStop(0, 'rgba(54, 215, 232, 1)');
-                gradientStrokeBlue.addColorStop(1, 'rgba(177, 148, 250, 1)');
-                let gradientLegendBlue = 'linear-gradient(to right, rgba(54, 215, 232, 1), rgba(177, 148, 250, 1))';
-
-                let gradientStrokeRed = ctx.createLinearGradient(0, 0, 0, 50);
-                gradientStrokeRed.addColorStop(0, 'rgba(255, 191, 150, 1)');
-                gradientStrokeRed.addColorStop(1, 'rgba(254, 112, 150, 1)');
-                let gradientLegendRed = 'linear-gradient(to right, rgba(255, 191, 150, 1), rgba(254, 112, 150, 1))';
-                let trafficChartData = {
+            const canvas = document.getElementById('gender-ratio-chart');
+            if (!canvas) return;
+            new Chart(canvas.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ["{{ __('male') }}", "{{ __('female') }}"],
                     datasets: [{
-                        data: [{{$boys}}, {{$girls}}],
-                backgroundColor: [
-                    gradientStrokeBlue,
-                    gradientStrokeRed
-                ],
-                    hoverBackgroundColor: [
-                    gradientStrokeBlue,
-                    gradientStrokeRed
-                ],
-                    borderColor: [
-                    gradientStrokeBlue,
-                    gradientStrokeRed
-                ],
-                    legendColor: [
-                    gradientLegendBlue,
-                    gradientLegendRed
-                ]
-            }],
-
-                // These labels appear in the legend and in the tooltips when hovering different arcs
-                labels: [
-                    "{{__('male')}}",
-                    "{{__('female')}}"
-                ]
-            };
-                let trafficChartOptions = {
+                        data: [{{ $boys }}, {{ $girls }}],
+                        backgroundColor: ['#5856D6', '#FF2D55'],
+                        hoverBackgroundColor: ['#4846B0', '#E11D48'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
                     responsive: true,
-                    animation: {
-                        animateScale: true,
-                        animateRotate: true
-                    },
-                    legend: false,
-                    legendCallback: function (chart) {
-                        let text = [];
-                        text.push('<ul>');
-                        for (let i = 0; i < trafficChartData.datasets[0].data.length; i++) {
-                            text.push('<li><span class="legend-dots" style="background:' + trafficChartData.datasets[0].legendColor[i] + '"></span>');
-                            if (trafficChartData.labels[i]) {
-                                text.push(trafficChartData.labels[i]);
+                    maintainAspectRatio: false,
+                    cutoutPercentage: 74,
+                    legend: { display: false },
+                    tooltips: {
+                        backgroundColor: 'rgba(29, 29, 31, 0.92)',
+                        cornerRadius: 8,
+                        xPadding: 10,
+                        yPadding: 8,
+                        displayColors: false,
+                        callbacks: {
+                            label: function (item, data) {
+                                return data.labels[item.index] + ': ' + data.datasets[0].data[item.index] + '%';
                             }
-                            text.push('<span class="float-right">' + trafficChartData.datasets[0].data[i] + "%" + '</span>')
-                            text.push('</li>');
                         }
-                        text.push('</ul>');
-                        return text.join('');
-                    }
-                };
-                let trafficChartCanvas = $("#gender-ratio-chart").get(0).getContext("2d");
-                let trafficChart = new Chart(trafficChartCanvas, {
-                    type: 'doughnut',
-                    data: trafficChartData,
-                    options: trafficChartOptions
-                });
-                $("#gender-ratio-chart-legend").html(trafficChart.generateLegend());
-            }
-            if ($("#inline-datepicker").length) {
-                $('#inline-datepicker').datepicker({
-                    enableOnReadonly: true,
-                    todayHighlight: true,
-                });
-            }
+                    },
+                    animation: { animateScale: false, animateRotate: true }
+                }
+            });
         });
     })(jQuery);
 </script>

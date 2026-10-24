@@ -9,7 +9,22 @@
 </style>
 <nav class="navbar default-layout-navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
     <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
-        <a class="navbar-brand brand-logo" href="{{ URL::to('/') }}"> <img style="height: 60px !important;width: 80%" src="{{ config('environment.LOGO1') ? url(Storage::url(config('environment.LOGO1'))) : url('assets/logo.png') }}" alt="logo"> </a> <a class="navbar-brand brand-logo-mini" href="{{ URL::to('/') }}"> <img style="height: 40px !important;width: 40%" src="{{ config('environment.LOGO1') ? url(Storage::url(config('environment.LOGO1'))) : url('assets/logo.png') }}" alt="logo"> </a>
+        @if(config('environment.LOGO1'))
+            <a class="navbar-brand brand-logo" href="{{ URL::to('/') }}"> <img style="height: 44px !important;width: 80%" src="{{ url(Storage::url(config('environment.LOGO1'))) }}" alt="logo"> </a>
+            <a class="navbar-brand brand-logo-mini" href="{{ URL::to('/') }}"> <img style="height: 32px !important;width: 40%" src="{{ url(Storage::url(config('environment.LOGO1'))) }}" alt="logo"> </a>
+        @else
+            {{-- No uploaded logo: show a clean wordmark --}}
+            <a class="navbar-brand brand-logo lm-brand" href="{{ URL::to('/') }}">
+                <span class="lm-brand__mark"><i class="fa fa-graduation-cap"></i></span>
+                <span class="lm-brand__text">
+                    <span class="lm-brand__name">Parent Teacher</span>
+                    <span class="lm-brand__tag">Mobile · Admin</span>
+                </span>
+            </a>
+            <a class="navbar-brand brand-logo-mini lm-brand" href="{{ URL::to('/') }}">
+                <span class="lm-brand__mark"><i class="fa fa-graduation-cap"></i></span>
+            </a>
+        @endif
     </div>
     <div class="navbar-menu-wrapper d-flex align-items-stretch">
         <button class="navbar-toggler navbar-toggler align-self-center" type="button" data-toggle="minimize">
@@ -63,14 +78,22 @@
 <!--            </li>-->
             <li class="nav-item nav-profile dropdown">
                 <a class="nav-link dropdown-toggle" id="profileDropdown" href="#" data-toggle="dropdown" aria-expanded="true">
-                    <div class="nav-profile-img">
-                        <img src="{{ Auth::user()->image ? asset(Auth::user()->image) : asset('storage/profile/default-image.jpg') }}" alt="image" onerror="onErrorImage(event)">
-                    </div>
-                    <div class="nav-profile-text">
-                        <p class="mb-1 text-black">{{ Auth::user()->first_name }} {{ Auth::user()->last_name }}</p>
+                    <span class="lm-avatar">
+                        {{ mb_substr(Auth::user()->first_name ?? '', 0, 1) }}{{ mb_substr(Auth::user()->last_name ?? '', 0, 1) }}
+                        @if(Auth::user()->image)
+                            <img src="{{ Auth::user()->image }}" alt="" onerror="this.remove()">
+                        @endif
+                    </span>
+                    <div class="nav-profile-text d-none d-md-block">
+                        <p class="mb-1 text-black">{{ ucwords(Auth::user()->first_name.' '.Auth::user()->last_name) }}</p>
+                        <span class="lm-role">{{ Auth::user()->getRoleNames()->first() }}</span>
                     </div>
                 </a>
                 <div class="dropdown-menu navbar-dropdown" aria-labelledby="profileDropdown">
+                    <a class="dropdown-item" href="{{ route('workspace.home') }}">
+                        <i class="fa fa-th-large mr-2"></i>Role workspaces</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="{{ route('security.index') }}">Account security</a>
                     @can('update-admin-profile')
                     <a class="dropdown-item" href="{{ route('edit-profile') }}">
                         <i class="fa fa-user mr-2"></i>{{ __('update_profile') }}</a>
