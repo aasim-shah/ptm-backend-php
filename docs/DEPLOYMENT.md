@@ -165,3 +165,13 @@ Combined verification: **81 tests, 454 assertions passed**; route-cache build/cl
 The active `/root/ptm-candidate` stack was updated with image `sha256:0744aa8c2912cbfb667e482f039d8fada87fa0a1febeec1a5986ae85c420a396`. Final database/uploads/configuration/source backup: `/root/ptm-deploy-backups/20261021T073113Z-four-panels`. Promotion log: `/root/ptm-deploy-backups/backend-7db0c64-promote.log`.
 
 Hosted smoke checks passed for all four admin roles and MFA, explicitly authorized Staff web access, Parent/Teacher/unauthorized Staff web denial, and retained mobile workspace API access. Existing hosted admin-review credentials were rechecked and preserved. App, queue worker and scheduler are healthy; public readiness returns `ready`. Temporary smoke users were removed. No provider financial transaction or live video call was performed.
+
+## 11. Backend pull and redeploy — 24 October 2026
+
+Pulled `origin/main` to commit `ddf0618` (merge of the workspace-portals work with the upstream `f8c24fb` verification fixes) and redeployed the active `/root/ptm-candidate` stack on loopback port 8091.
+
+Only two source files differed from the already-deployed four-panel build: `app/Http/Controllers/Api/AuthController.php` and `config/ptm.php`. The change adds a `require_email_verification` config flag (env `AUTH_REQUIRE_EMAIL_VERIFICATION`, default true) and gates the login OTP step behind it; with the default, login behaviour is unchanged. The server-specific `docker-compose.prod.yml` (candidate project name, port 8091, HTTP session cookies) was deliberately not overwritten.
+
+Before the change, a timestamped backup was written to `/root/ptm-deploy-backups/20261024T184828Z-ddf0618-manual`: the `ptm` database dump, the environment and Compose files, the candidate source tarball, and the rollback image id `sha256:0744aa8c…`. The candidate image was rebuilt with `WITH_GRPC=0` (new id `sha256:8be7b83c…`) and the containers recreated with `up -d`; the app, worker and scheduler report healthy.
+
+Post-deploy checks: public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; Super Admin and Sub-Super Admin review logins are accepted and routed to the MFA step. The other Caddy-fronted services (Postiz on `socialfeed.focusquota.com`) were untouched and still respond. The `workspace:readiness --production` gates that remain false are the documented temporary-review states from §8 (HTTP instead of HTTPS, non-secure session cookies, disabled email/push, and unaccepted Agora/Stripe/PayPal providers and their modules); they are intentional and not deployment failures.
