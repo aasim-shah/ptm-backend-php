@@ -58,7 +58,11 @@ class AuthController extends Controller
                 $userU->name = $request['first_name']." ".$request['last_name'];
 
             if (isset($request['password']) && !empty($request['password'])) {
-                $userU->password = $request['password'];
+                $request->validate(['password' => 'required|string|min:12|max:128', 'current_password' => 'required|string']);
+                if (!Hash::check($request->current_password, $userU->password)) {
+                    return response()->json(['message' => 'Current password is incorrect.'], 422);
+                }
+                $userU->password = Hash::make($request['password']);
             }
             if (isset($request['fcm_id']) && !empty($request['fcm_id'])) {
                 $userU->fcm_id = $request['fcm_id'];
@@ -227,7 +231,7 @@ class AuthController extends Controller
         $subscription->remaining_time = config('environment.TRAIL')*60;
         $subscription->call_count = config('environment.TRAIL_CALL_COUNT');
         $subscription->activated_date = Carbon::now()->toDateString();
-        $subscription->expire_date = Carbon::now()->addDays((config('environment.TRAIL_DAYS') ?? 5))->toDateString();
+        $subscription->expire_date = Carbon::now()->addDays((int) (config('environment.TRAIL_DAYS') ?? 5))->toDateString();
         $subscription->status = 'ACTIVE';
         $subscription->save();
     }
@@ -279,6 +283,12 @@ class AuthController extends Controller
             }
 
             $user = User::where('email', $request->email)->with('rate')->first();
+            if (!(int) $user->status) {
+                Auth::logout();
+                return response()->json(['message' => 'This account is inactive.'], 403);
+            }
+            $hasSchool = UserSchools::where('user_id',$user->id)->first();
+            $user->has_schools = (bool)$hasSchool;
 
             if($user && !$user->email_verified_at && config('ptm.require_email_verification')){
 

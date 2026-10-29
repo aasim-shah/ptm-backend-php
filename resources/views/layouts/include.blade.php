@@ -36,6 +36,11 @@
         --theme-color: <?=$theme_color ?>;
     }
 </style>
+{{-- Lumen theme: loads last so it overrides the template. Its tokens also replace --theme-color. --}}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Dancing+Script:wght@600&display=swap">
+<link rel="stylesheet" href="{{ asset('/assets/css/lumen-theme.css') }}?v={{ @filemtime(public_path('assets/css/lumen-theme.css')) }}">
 <script>
     var baseUrl = "{{ URL::to('/') }}";
     const onErrorImage = (e) => {
@@ -43,3 +48,7 @@
     };
 </script>
 @yield('scripts')
+
+<link rel="stylesheet" href="{{ asset('assets/css/colourful-portals.css') }}?v={{ filemtime(public_path('assets/css/colourful-portals.css')) }}">
+
+<link rel="stylesheet" href="{{ asset('assets/css/portal-ui.css') }}?v={{ filemtime(public_path('assets/css/portal-ui.css')) }}">

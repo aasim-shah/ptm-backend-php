@@ -58,8 +58,11 @@ Route::get('login', [\App\Http\Controllers\Auth\LoginController::class, 'showLog
 Route::namespace('App\Http\Controllers')->group(function () {
     Route::resetPassword();
 });
-Route::get('/', [HomeController::class, 'login']);
+Route::get('/', function () { return redirect(auth()->check() ? '/dashboard' : '/login'); });
 Route::post('/login-web', [\App\Http\Controllers\Auth\LoginController::class, 'loginWeb'])->name('loginWeb')->middleware('throttle:10,1');
+
+require __DIR__.'/workspaces.php';
+require __DIR__.'/security.php';
 
 Route::group(['middleware' => ['Role', 'auth']], function () {
     Route::get('/agora-chat', 'App\Http\Controllers\MeetingController@index');
@@ -80,7 +83,6 @@ Route::group(['middleware' => ['Role', 'auth']], function () {
 
 
     Route::group(['middleware' => 'language'], function () {
-        Route::get('/', [HomeController::class, 'index']);
         Route::get('home', [HomeController::class, 'index'])->name('home');
         Route::get('/logout', [HomeController::class, 'logout'])->name('logout');
         Route::post('/logout', [HomeController::class, 'logout']);
@@ -374,3 +376,6 @@ Route::get('page/privacy-policy', function () {
     $settings = getSettings('privacy_policy');
     echo $settings['privacy_policy'] ?? '';
 });
+
+Route::get('/health/live',[\App\Http\Controllers\HealthController::class,'live'])->name('health.live');
+Route::get('/health/ready',[\App\Http\Controllers\HealthController::class,'ready'])->name('health.ready');

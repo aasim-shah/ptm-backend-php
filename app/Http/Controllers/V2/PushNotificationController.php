@@ -17,11 +17,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use LaravelFCM\Facades\FCM;
-use LaravelFCM\Message\OptionsBuilder;
-use LaravelFCM\Message\PayloadDataBuilder;
-use LaravelFCM\Message\PayloadNotificationBuilder;
-use LaravelFCM\Message\Topics;
 
 class PushNotificationController extends Controller
 {
@@ -199,39 +194,7 @@ class PushNotificationController extends Controller
     }
     public function sendtestNotification(Request $request)
     {
-        try {
-            $optionBuilder = new OptionsBuilder();
-            $optionBuilder->setTimeToLive(60*20);
-
-            $notificationBuilder = new PayloadNotificationBuilder('Meeting');
-            $notificationBuilder->setBody('Meeting Started')
-                ->setSound('default')
-                ->setClickAction(config('environment.APP_URL'));
-            $dataBuilder = new PayloadDataBuilder();
-            $dataBuilder->addData(
-                [
-                    'sender_name' => 'Parent Teacher Mobile',
-                    'message' => 'Meeting Started',
-                    'body' => 'Meeting Started'
-                ]);
-            $option = $optionBuilder->build();
-            $notification = $notificationBuilder->build();
-            $tokenUser = User::where('id',Auth::user()->id)->first();
-
-            $topic = new Topics();
-            $topic->topic($tokenUser->fcm_id)->andTopic(function($condition) use ($tokenUser){
-                $condition->topic($tokenUser->fcm_id)->orTopic('cultural');
-            });
-            $data = $dataBuilder->build();
-            $downstreamResponse = FCM::sendTo($tokenUser->fcm_id, $option, $notification, $data);
-
-            return $downstreamResponse->numberSuccess();
-
-        }catch (\Throwable $th){
-            Log::error($th);
-        }
-
-        Log::info('notification sent successfully');
-
+        $sent = \App\Services\PushNotificationSender::sendMobileMessage('PTM','School update',$request->user()->fcm_id,'TEST',[]);
+        return response()->json(['sent'=>(bool)$sent]);
     }
 }

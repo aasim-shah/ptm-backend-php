@@ -14,6 +14,7 @@ class AppServiceProvider extends ServiceProvider
      * @return void
      */
     public function register() {
+        $this->app->scoped(\App\Support\LegacyForm::class, fn() => new \App\Support\LegacyForm());
 //        $this->renderable(function (NotFoundHttpException $e, $request) {
 //            if ($request->is('api/*')) {
 //                return response()->json([

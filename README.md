@@ -1,9 +1,10 @@
 # School System — Parent Teacher Mobile backend
 
-Laravel 9 backend for the Parent Teacher Mobile app (parent, teacher and student modes) and the web admin panel used by Super Admins and Principals.
+Laravel 12 backend for the Parent Teacher Mobile app (parent, teacher and student modes) and four administrative web contexts: Super Admin, Sub-Super Admin, District Admin and School Admin.
 
 - **API** (`routes/api.php`): Sanctum Bearer tokens. `/api/teacher/*`, `/api/parent/*` and `/api/student/*` are restricted to the matching user type.
-- **Admin panel** (`routes/web.php`): Blade + jQuery. Sign-in is through `/login-web`, and only users with the `Super Admin` or `Principal` role are admitted.
+- **Role dashboards** (`routes/workspaces.php`): universal `/login-web` sign-in and `/dashboard` for the four administrative roles. Parent/Teacher use the mobile app; Staff web access requires an explicit `web.access` grant. See [client feedback implementation and panel status](docs/client-feedback-architecture.md).
+- **Legacy admin panel** (`routes/web.php`): Blade + jQuery; its management routes remain restricted to active, verified `Super Admin` users. School Admins use organization-scoped workspace routes.
 - **Integrations:** Agora (calls), Firebase (push, chat), SendGrid (email), PayPal (subscriptions), Razorpay/Stripe (fees).
 
 ## Local development

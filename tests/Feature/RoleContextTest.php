@@ -51,6 +51,7 @@ class RoleContextTest extends TestCase
             'type' => $type,
             'country_id' => $this->countryId,
             'email_verified_at' => now(),
+            'status' => 1,
         ], $attributes));
         if (in_array($type, ['parent', 'teacher'], true)) {
             $user->assignRole(ucfirst($type));

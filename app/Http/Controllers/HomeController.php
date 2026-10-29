@@ -279,7 +279,7 @@ class HomeController extends Controller
             return response()->json($response);
         }
         try {
-            $user_db = User::find($request->id);
+            $user_db = $request->user();
             $user_db->first_name = $request->first_name;
             $user_db->last_name = $request->last_name;
             $user_db->mobile = $request->mobile;
