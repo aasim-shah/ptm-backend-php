@@ -116,8 +116,8 @@ class AuthController extends Controller
     {
         try {
             // Self-registration doorways: parent, teacher, staff, school admin, district admin.
-            // Staff and admin accounts get no access until an organization approves their
-            // role request (POST /auth/role-requests). Super Admin and Principal accounts
+            // Staff and admin accounts get their role when they pick an organization
+            // (POST /auth/role-requests). Super Admin and Principal accounts
             // are still created from the admin panel only.
             $request->merge(['type' => strtolower((string) $request->input('type'))]);
             $validateUser = Validator::make($request->all(),
@@ -140,6 +140,7 @@ class AuthController extends Controller
                 ], 401);
             }
             $otp= Utility::getOtp();
+            $gender = strtolower(trim((string) $request->input('gender'))) ?: null;
 
             DB::beginTransaction();
             $user = User::create([
@@ -150,6 +151,7 @@ class AuthController extends Controller
                 'email' => $request->email,
                 'industry' => $request->industry,
                 'job_title' => $request->job_title,
+                'gender' => $gender,
                 'country_id' => $request->country_id ?? null,
                 'email_verified_at' => null,
                 'pincode' => $otp,
@@ -175,7 +177,7 @@ class AuthController extends Controller
                     'user_id' => $user->id,
                     'first_name' => $request->first_name,
                     'last_name' => $request->last_name,
-                    'gender' => $request->gender,
+                    'gender' => $gender ?? '', // parents.gender is NOT NULL
                     'email' => $request->email,
                     'mobile' => $request->mobile,
                     'occupation' => $request->occupation,
@@ -383,7 +385,8 @@ class AuthController extends Controller
         if($isSchoolLinked){
             return response()->json([
                 'status' => 400,
-                'message' => "Some of the provided schools have already linked you!",
+                // Older app builds open the dashboard on exactly this message.
+                'message' => "You have already connected a school",
             ], 400);
         }
         $role = strtolower((string) $user->type);

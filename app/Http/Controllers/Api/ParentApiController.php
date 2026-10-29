@@ -1949,14 +1949,12 @@ class ParentApiController extends Controller
 
         if ($request->user()->type == "parent") {
             $parent_id = $request->user()->parent->user_id;
-            $students = Students::where('father_id', $parent_id)
-                ->orWhere('mother_id', $parent_id)
+            $students = Students::ofParent($parent_id)
                 ->whereHas('user',function ($query) {
                     $query->whereNull('deleted_at');
                 })
                 ->with('user')->get();
-            $studentsPluck = Students::where('father_id', $parent_id)
-                ->orWhere('mother_id', $parent_id)
+            $studentsPluck = Students::ofParent($parent_id)
                 ->whereHas('user',function ($query) {
                     $query->whereNull('deleted_at');
                 })
@@ -2033,27 +2031,23 @@ class ParentApiController extends Controller
             return response()->json($response,400);
         }
 
-        $fIds = Students::whereHas('class_section', function ($query) use ($user, $class_id) {
+        $parentIds = Students::whereHas('class_section', function ($query) use ($user, $class_id) {
                 $query->where('class_teacher_id', $user->id);
                 $query->where('class_id', $class_id);
-        })->pluck('father_id')->toArray();
+        })->get()->flatMap(fn (Students $student) => $student->parentUserIds())->unique()->values()->all();
 
-        $mIds = Students::whereHas('class_section', function ($query) use ($user, $class_id) {
-                $query->where('class_teacher_id', $user->id);
-                $query->where('class_id', $class_id);
-        })->pluck('mother_id')->toArray();
-
-        $parentIds = array_unique(array_merge($fIds,$mIds));
         $parents = User::whereHas('parent')
             ->whereIn('id', $parentIds)->get();
 
-        $students = Students::whereIn('mother_id',$parentIds)->orWhereIn('father_id',$parentIds)->get();
+        $students = Students::where(function ($query) use ($parentIds) {
+            $query->whereIn('mother_id',$parentIds)->orWhereIn('father_id',$parentIds)->orWhereIn('guardian_id',$parentIds);
+        })->get();
 
         foreach ($parents as $parent){
             $parentStudents = [];
 //            $parent->parent_student = [];
             foreach ($students as $student){
-                if($student->father_id == $parent->id || $student->mother_id == $parent->id){
+                if(in_array($parent->id, $student->parentUserIds())){
                     $parentStudents[] = $student;
                 }
             }

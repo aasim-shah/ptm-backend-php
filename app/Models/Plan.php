@@ -30,6 +30,15 @@ class Plan extends Model
     const ACTIVE = 'ACTIVE';
 
     /**
+     * Canonical paid subscription type: 'REGULAR-' plus the PayPal frequency in Title case
+     * (REGULAR-Day, REGULAR-Month, REGULAR-Year), matching REGULAR_MONTH.
+     */
+    public static function regularType(?string $frequency): string
+    {
+        return 'REGULAR-' . ucfirst(strtolower((string) $frequency));
+    }
+
+    /**
      * The "type" of the auto-incrementing ID.
      * 
      * @var string

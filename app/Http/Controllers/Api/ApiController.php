@@ -1976,8 +1976,8 @@ class ApiController extends Controller
             $this->notificationSender->sendNotification(
                 "Class Removed",
                 $message,
-                [$classStudent->mother_id,$classStudent->father_id], "CLASS_REMOVED", $meeting);
-            $this->notificationSender->saveLogs($classStudent->mother_id ?? $classStudent->father_id,$user->id,$message,'CLASS_REMOVED','Class removed by the teacher');
+                $classStudent->parentUserIds(), "CLASS_REMOVED", $meeting);
+            $this->notificationSender->saveLogs($classStudent->primaryParentId(),$user->id,$message,'CLASS_REMOVED','Class removed by the teacher');
         }
         ClassSchool::where('id', $request->class_id)->delete();
         $classSection->delete();
@@ -2045,8 +2045,8 @@ class ApiController extends Controller
                 $this->notificationSender->sendNotification(
                     "Subject Removed",
                     $message,
-                    [$student->mother_id,$student->father_id], "SUBJECT_REMOVED", $canDelete);
-                $this->notificationSender->saveLogs($student->mother_id ?? $student->father_id,$user->id,$message,'SUBJECT_REMOVED','Subject removed by the teacher');
+                    $student->parentUserIds(), "SUBJECT_REMOVED", $canDelete);
+                $this->notificationSender->saveLogs($student->primaryParentId(),$user->id,$message,'SUBJECT_REMOVED','Subject removed by the teacher');
 
             }
         }

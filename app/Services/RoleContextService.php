@@ -333,20 +333,27 @@ class RoleContextService
     }
 
     /**
-     * Staff / admin access request (Part A5.4). Idempotent: an existing request for the same
-     * user, role and organization is returned unchanged.
+     * Staff / admin self-signup to an organization (Part A5.4).
      *
-     * @return array{0: UserRole, 1: bool} [context, created]
+     * Without approval (ptm.role_require_approval = false, the default) the role is active
+     * straight away; with approval it stays pending for the Web Panel. Idempotent: a live
+     * context for the same user, role and organization is returned unchanged, except that a
+     * pending one is granted once approval is off. Suspended and rejected contexts are never
+     * reopened from here (the controller answers 403); only an admin can restore them.
+     *
+     * @return array{0: UserRole, 1: bool} [context, changed by this call]
      */
     public function requestRole(User $user, string $role, string $organizationType, int $organizationId): array
     {
+        $requireApproval = (bool) config('ptm.role_require_approval');
         $existing = UserRole::where([
             'user_id' => $user->id,
             'role' => $role,
             'organization_type' => $organizationType,
             'organization_id' => $organizationId,
         ])->first();
-        if ($existing && !$existing->hasEnded()) {
+        if ($existing && !$existing->hasEnded()
+            && !($existing->status === 'pending' && !$requireApproval)) {
             return [$existing, false];
         }
 
@@ -356,21 +363,44 @@ class RoleContextService
             'organization_type' => $organizationType,
             'organization_id' => $organizationId,
         ]);
+        $details = ['role' => $role, 'organization_type' => $organizationType, 'organization_id' => $organizationId];
+
+        if ($requireApproval) {
+            $context->fill([
+                'status' => 'pending',
+                'source' => 'request',
+                'requested_at' => now(),
+                'decided_at' => null,
+                'decided_by' => null,
+                'effective_from' => null,
+                'effective_to' => null,
+            ])->save();
+
+            AuditLog::record($user->id, 'context.requested', $context, $context->id, $details);
+            $this->notifyApprovers($user, $context);
+            return [$context, true];
+        }
+
+        // Legacy links first, so a teacher adding Staff keeps Teacher as the active context.
+        $this->syncLegacyLinks($user);
+        $hadActiveContext = $this->defaultContext($user) !== null;
+
         $context->fill([
-            'status' => 'pending',
-            'source' => 'request',
+            'status' => 'active',
+            'source' => 'self_signup',
             'requested_at' => now(),
-            'decided_at' => null,
+            'decided_at' => now(),
             'decided_by' => null,
-            'effective_from' => null,
+            'effective_from' => now(),
             'effective_to' => null,
         ])->save();
+        if (!$hadActiveContext) {
+            $user->last_context_id = $context->id;
+            $user->save();
+        }
 
-        AuditLog::record($user->id, 'context.requested', $context, $context->id, [
-            'role' => $role, 'organization_type' => $organizationType, 'organization_id' => $organizationId,
-        ]);
-        $this->notifyApprovers($user, $context);
-
+        AuditLog::record($user->id, 'context.granted', $context, $context->id, ['source' => 'self_signup'] + $details);
+        $this->notifyJoined($user, $context);
         return [$context, true];
     }
 
@@ -590,6 +620,28 @@ class RoleContextService
                 json_encode(['context_id' => (string) $context->id, 'status' => $context->status]));
             foreach ($ids as $id) {
                 $this->notificationSender->saveLogs($id, $requester->id, $message, 'ROLE_REQUEST', $title);
+            }
+        } catch (\Throwable $e) {
+            Log::error($e);
+        }
+    }
+
+    /** Informational notice to the organization's admins: "<name> joined <org> as <role>". */
+    private function notifyJoined(User $member, UserRole $context): void
+    {
+        try {
+            $ids = array_values(array_diff($this->approverIds($context), [$member->id]));
+            if (!$ids) {
+                return;
+            }
+            $organization = $this->organizationSummary($context->organization_type, $context->organization_id);
+            $title = 'New member';
+            $message = trim($member->first_name . ' ' . $member->last_name) . ' joined '
+                . ($organization['name'] ?? 'your organization') . ' as ' . str_replace('_', ' ', $context->role) . '.';
+            $this->notificationSender->sendNotification($title, $message, $ids, 'ROLE_JOINED',
+                json_encode(['context_id' => (string) $context->id, 'status' => $context->status]));
+            foreach ($ids as $id) {
+                $this->notificationSender->saveLogs($id, $member->id, $message, 'ROLE_JOINED', $title);
             }
         } catch (\Throwable $e) {
             Log::error($e);

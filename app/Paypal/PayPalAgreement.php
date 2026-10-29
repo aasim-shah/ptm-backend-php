@@ -118,7 +118,7 @@ class PayPalAgreement extends Paypal
         $subscription->expire_date = Carbon::now()->addYear()->toDateString();
         $subscription->subscription_id = $subscription_id;
         if ($plan) {
-            $subscription->type = ($plan[0]->type == 'TRIAL' ? 'REGULAR': $plan[0]->type) . '-' . $plan[0]->frequency;
+            $subscription->type = \App\Models\Plan::regularType($plan[0]->frequency);
             $subscription->remaining_time = config('environment.PREMIUM')*60;
             $subscription->call_count = config('environment.PREMIUM_CALL_COUNT');
         }

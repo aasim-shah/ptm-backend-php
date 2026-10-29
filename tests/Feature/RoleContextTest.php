@@ -132,8 +132,63 @@ class RoleContextTest extends TestCase
         $this->assertDatabaseMissing('user_roles', ['user_id' => $user->id]);
     }
 
-    public function test_staff_request_is_pending_idempotent_and_grants_nothing(): void
+    public function test_staff_self_signup_is_active_idempotent_and_becomes_the_active_context(): void
     {
+        $school = $this->makeSchool();
+        $staff = $this->makeUser('staff');
+        $body = ['organization_id' => $school->id, 'organization_type' => 'school', 'role' => 'staff'];
+
+        $id = $this->actAs($staff)->postJson('/api/auth/role-requests', $body)->assertOk()
+            ->assertJsonPath('message', 'Access granted')
+            ->assertJsonPath('data.status', 'active')->json('data.id');
+        $this->actAs($staff)->postJson('/api/auth/role-requests', $body)->assertOk()
+            ->assertJsonPath('message', 'Access already granted')
+            ->assertJsonPath('data.id', $id);
+        $this->assertSame(1, UserRole::where('user_id', $staff->id)->count());
+
+        $this->actAs($staff)->getJson('/api/auth/details')->assertOk()
+            ->assertJsonPath('has_school', true)
+            ->assertJsonPath('contexts.0.status', 'active')
+            ->assertJsonPath('contexts.0.permissions', ['events.view', 'messages.use', 'schedule.use', 'video.use'])
+            ->assertJsonPath('active_context_id', $id);
+        $this->assertTrue(\App\Models\AuditLog::where('action', 'context.granted')->where('context_id', $id)->exists());
+    }
+
+    public function test_suspended_role_is_not_reactivated_by_a_new_request(): void
+    {
+        $school = $this->makeSchool();
+        $staff = $this->makeUser('staff');
+        $body = ['organization_id' => $school->id, 'organization_type' => 'school', 'role' => 'staff'];
+
+        $id = $this->actAs($staff)->postJson('/api/auth/role-requests', $body)->assertOk()->json('data.id');
+        UserRole::whereKey($id)->update(['status' => 'suspended']);
+
+        $this->actAs($staff)->postJson('/api/auth/role-requests', $body)->assertForbidden()
+            ->assertJsonPath('error', true);
+        $this->assertSame('suspended', UserRole::find($id)->status);
+    }
+
+    public function test_teacher_adding_staff_keeps_teacher_as_active_context(): void
+    {
+        $school = $this->makeSchool();
+        $teacher = $this->makeUser('teacher');
+        $this->actAs($teacher)->postJson('/api/user/schools', ['school_ids' => [$school->id]])->assertOk();
+        $teacherContext = $this->actAs($teacher)->getJson('/api/auth/details')->json('active_context_id');
+
+        $staffContext = $this->actAs($teacher)->postJson('/api/auth/role-requests',
+            ['organization_id' => $school->id, 'organization_type' => 'school', 'role' => 'staff'])
+            ->assertOk()->assertJsonPath('data.status', 'active')->json('data.id');
+
+        $this->actAs($teacher)->getJson('/api/auth/details')->assertOk()
+            ->assertJsonPath('active_context_id', $teacherContext)
+            ->assertJsonCount(2, 'contexts');
+        $this->actAs($teacher)->postJson('/api/auth/context/switch', ['context_id' => (string) $staffContext])
+            ->assertOk()->assertJsonPath('active_context_id', $staffContext);
+    }
+
+    public function test_with_approval_required_staff_request_is_pending_idempotent_and_grants_nothing(): void
+    {
+        config(['ptm.role_require_approval' => true]);
         $school = $this->makeSchool();
         $staff = $this->makeUser('staff');
         $body = ['organization_id' => $school->id, 'organization_type' => 'school', 'role' => 'staff'];

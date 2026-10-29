@@ -22,7 +22,8 @@ class RoleContextController extends Controller
 
     /**
      * POST /auth/role-requests
-     * Staff, School Admin and District Admin ask an organization for access.
+     * Staff, School Admin and District Admin join an organization: granted at once, or a
+     * pending request when ptm.role_require_approval is on.
      */
     public function requestRole(Request $request)
     {
@@ -58,11 +59,23 @@ class RoleContextController extends Controller
             return $this->error('This organization is outside your country.', 422);
         }
 
-        [$context, $created] = $this->contexts->requestRole($user, $role, $type, (int) $organization->id);
+        [$context, $changed] = $this->contexts->requestRole($user, $role, $type, (int) $organization->id);
+
+        // An admin removed this access; a self-request must not bring it back.
+        if (in_array($context->status, ['suspended', 'rejected'], true)) {
+            $name = $type === 'district' ? $organization->name : $organization->school_name;
+            return $this->error("Your access to {$name} was removed. Contact the organization.", 403);
+        }
+
+        if ($context->status === 'pending') {
+            $message = $changed ? 'Request sent' : 'Request already exists';
+        } else {
+            $message = $changed ? 'Access granted' : 'Access already granted';
+        }
 
         return response()->json([
             'status' => 200,
-            'message' => $created ? 'Request sent' : 'Request already exists',
+            'message' => $message,
             'data' => ['id' => $context->id, 'status' => $context->status],
         ], 200);
     }

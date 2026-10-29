@@ -142,8 +142,6 @@ class StudentController
     {
 
         $user_ = $request->user();
-        $fatherId = null;
-        $motherId = null;
         $file_path = null;
         if (\App\Support\Access::role($user_) == 'parent') {
             if(!$user_->parent){
@@ -153,11 +151,6 @@ class StudentController
                     'data' => null
                 );
                 return response()->json($response);
-            }
-            if ($user_->gender == 'male') {
-                $fatherId = $user_->parent->user_id;
-            } else {
-                $motherId = $user_->parent->user_id;
             }
         } else {
             $response = array(
@@ -208,8 +201,9 @@ class StudentController
         $student->user_id = $user->id;
         $student->relationship = $request->relationship;
         $student->is_new_admission = 1;
-        $student->father_id = $fatherId;
-        $student->mother_id = $motherId;
+        // The slot follows the relationship the parent picked, not the parent's gender.
+        $slot = Students::guardianSlot($request->relationship, $user_->gender);
+        $student->{$slot} = $user_->parent->user_id;
         $student->save();
         $response = array(
             'error' => false,
@@ -242,11 +236,7 @@ class StudentController
         $student_image = $request->file('image');
         $file_path = null;
 
-        $student = Students::where('user_id',$student_id)
-            ->where(function ($query) use($user_){
-                $query->where('mother_id',$user_->id);
-                $query->orWhere('father_id',$user_->id);
-            })->first();
+        $student = Students::where('user_id',$student_id)->ofParent($user_->id)->first();
         if(!$student){
             $response = array(
                 'error' => true,
@@ -288,6 +278,13 @@ class StudentController
 
         if($request->relationship){
             $student->relationship = $request->relationship;
+            // Move the caller to the slot of the new relationship.
+            foreach (['father_id', 'mother_id', 'guardian_id'] as $column) {
+                if ((int) $student->{$column} === (int) $user_->id) {
+                    $student->{$column} = null;
+                }
+            }
+            $student->{Students::guardianSlot($request->relationship, $user_->gender)} = $user_->id;
         }
         $student->is_new_admission = 1;
         $student->save();
@@ -396,8 +393,8 @@ class StudentController
             $this->notificationSender->sendNotification(
                 "Student Removed",
                 $message,
-                [$isSchoolsAssigned->mother_id,$isSchoolsAssigned->father_id], "STUDENT_REMOVED", $meeting);
-            $this->notificationSender->saveLogs($isSchoolsAssigned->mother_id ?? $isSchoolsAssigned->father_id,$user->id,$message,'STUDENT_REMOVED','Student removed from the class');
+                $isSchoolsAssigned->parentUserIds(), "STUDENT_REMOVED", $meeting);
+            $this->notificationSender->saveLogs($isSchoolsAssigned->primaryParentId(),$user->id,$message,'STUDENT_REMOVED','Student removed from the class');
 
         }
         return response()->json([
@@ -460,11 +457,11 @@ class StudentController
             }
             StudentSubject::insert($student_subject);
 
-            $userSchool = UserSchools::where('user_id',$student->mother_id ?? $student->father_id)->where('school_id',$classObj->school_id)->first();
+            $userSchool = UserSchools::where('user_id',$student->primaryParentId())->where('school_id',$classObj->school_id)->first();
             if(!$userSchool){
                 $userSchool = new UserSchools();
                 $userSchool->id = Utility::getUUID();
-                $userSchool->user_id = $student->mother_id ?? $student->father_id;
+                $userSchool->user_id = $student->primaryParentId();
                 $userSchool->school_id = $classObj->school_id;
                 $userSchool->save();
             }
@@ -475,8 +472,8 @@ class StudentController
             $this->notificationSender->sendNotification(
                 "Student Accepted",
                 $message,
-                [$student->mother_id,$student->father_id], "STUDENT_ACCEPTED", $student);
-            $this->notificationSender->saveLogs($student->mother_id ?? $student->father_id,$user->id,$message,
+                $student->parentUserIds(), "STUDENT_ACCEPTED", $student);
+            $this->notificationSender->saveLogs($student->primaryParentId(),$user->id,$message,
                 'STUDENT_ACCEPTED','Student accepted by the teacher');
 
             $response = array(
@@ -497,8 +494,8 @@ class StudentController
             $this->notificationSender->sendNotification(
                 "Student Rejected",
                 $message,
-                [$student->mother_id,$student->father_id], "STUDENT_REJECTED", $student);
-            $this->notificationSender->saveLogs($student->mother_id ?? $student->father_id,$user->id,$message,
+                $student->parentUserIds(), "STUDENT_REJECTED", $student);
+            $this->notificationSender->saveLogs($student->primaryParentId(),$user->id,$message,
                 'STUDENT_REJECTED','Student rejected by the teacher');
 
             $response = array(
@@ -518,18 +515,13 @@ class StudentController
     {
         $user = $request->user();
         $classIds = null;
-        $fatherId = null;
-        $motherId = null;
+        $parentId = null;
 
         $firstName = trim($request->get('first_name')) ?? null;
         $lastName = trim($request->get('last_name')) ?? null;
 
         if (\App\Support\Access::role($user) == 'parent') {
-            if ($user->gender == 'male') {
-                $fatherId = $user->parent->user_id;
-            } else {
-                $motherId = $user->parent->user_id;
-            }
+            $parentId = $user->parent->user_id;
         } elseif (\App\Support\Access::role($user) == 'teacher') {
             if ($request->class_id) {
                 $classIds = [$request->class_id];
@@ -559,11 +551,9 @@ class StudentController
                 ->with('student.class_section.class.school')->paginate(50);
 
         } else {
-            $students = User::whereHas('student', function ($query) use ($fatherId, $motherId) {
-                if ($fatherId) {
-                    $query->where('father_id', $fatherId);
-                } elseif ($motherId) {
-                    $query->where('mother_id', $motherId);
+            $students = User::whereHas('student', function ($query) use ($parentId) {
+                if ($parentId) {
+                    $query->ofParent($parentId);
                 }
             })->where(function ($query) use ($firstName, $lastName) {
                 if ($firstName && !$lastName) {
@@ -621,11 +611,7 @@ class StudentController
             return response()->json($response);
         }
         $parentId = $user->parent->user_id;
-        $student = Students::where('user_id',$user_id)->with('user')
-            ->where(function ($query) use($parentId){
-                $query->where('mother_id',$parentId);
-                $query->orWhere('father_id',$parentId);
-            })->first();
+        $student = Students::where('user_id',$user_id)->with('user')->ofParent($parentId)->first();
         if(!$student){
             $response = array(
                 'error' => true,
@@ -661,10 +647,7 @@ class StudentController
         }
 
         $user = User::where('id', $user_id)->whereHas('student', function ($query) use ($parentId) {
-            $query->where(function ($query) use ($parentId) {
-                $query->where('father_id', $parentId)
-                    ->orWhere('mother_id', $parentId);
-            });
+            $query->ofParent($parentId);
         })->delete();
         Students::where('user_id',$user_id)->delete();
 
@@ -895,14 +878,11 @@ class StudentController
 
         $student_id = $request->student_id;
 
-        $mothers = Students::where('user_id',$student_id)->pluck('mother_id')->toArray();
-        $fathers = Students::where('user_id',$student_id)->pluck('father_id')->toArray();
+        $parentIds = Students::where('user_id',$student_id)->get()
+            ->flatMap(fn (Students $student) => $student->parentUserIds())->unique()->values()->all();
 
         $parents = User::where('type','parent')
-            ->where(function ($query) use ($mothers,$fathers){
-                $query->whereIn('id',$mothers);
-                $query->orWhere('id',$fathers);
-            })
+            ->whereIn('id',$parentIds)
             ->orderBy('first_name','ASC')
             ->get();
 
@@ -986,10 +966,7 @@ class StudentController
 
         $student = Students::where('class_status','PENDING')
             ->where('user_id',$student_id)
-            ->where(function ($query) use ($user_id){
-                $query->where('mother_id',$user_id);
-                $query->orWhere('father_id',$user_id);
-            })
+            ->ofParent($user_id)
             ->first();
         if($student){
             $student->class_status = null;

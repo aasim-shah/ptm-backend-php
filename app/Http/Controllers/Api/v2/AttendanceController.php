@@ -136,10 +136,10 @@ class AttendanceController extends Controller
                 $this->notificationSender->sendNotification(
                     "Student Attendance",
                     $message,
-                    [$presentStudent->mother_id , $presentStudent->father_id], "ATTENDANCE");
+                    $presentStudent->parentUserIds(), "ATTENDANCE");
                 $presentNotificationLogArray [] = [
                     "id" => Utility::getUUID(),
-                    "user_id" => $presentStudent->mother_id ?? $presentStudent->father_id,
+                    "user_id" => $presentStudent->primaryParentId(),
                     "from_user_id" => $user->id,
                     "message" => $message,
                     "type" => "ATTENDANCE",
@@ -159,10 +159,10 @@ class AttendanceController extends Controller
                 $this->notificationSender->sendNotification(
                     "Student Attendance",
                     $message,
-                    [$absentStudent->mother_id , $absentStudent->father_id], "ATTENDANCE");
+                    $absentStudent->parentUserIds(), "ATTENDANCE");
                 $absentNotificationLogArray [] = [
                     "id" => Utility::getUUID(),
-                    "user_id" => $absentStudent->mother_id ?? $absentStudent->father_id,
+                    "user_id" => $absentStudent->primaryParentId(),
                     "from_user_id" => $user->id,
                     "message" => $message,
                     "type" => "ATTENDANCE",

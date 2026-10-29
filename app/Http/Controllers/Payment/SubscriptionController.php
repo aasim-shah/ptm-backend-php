@@ -26,7 +26,7 @@ class SubscriptionController extends Controller
             $plan->description = $planCreated->description;
             $plan->amount = $planCreated->payment_definitions[0]->amount->value;
             $plan->currency = $planCreated->payment_definitions[0]->amount->currency;
-            $plan->type = $planCreated->payment_definitions[0]->type . "-" . $planCreated->payment_definitions[0]->frequency;
+            $plan->type = Plan::regularType($planCreated->payment_definitions[0]->frequency);
             $plan->save();
         }
         return response()->json(['data' => $planCreated ? json_decode($planCreated->toJSON(), true) : null]);

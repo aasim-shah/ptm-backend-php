@@ -623,7 +623,7 @@ class TeacherController extends Controller
 //                        }])
 //                        ->first();
 
-                    $logOwnId = $student->mother_id ?? $student->father_id;
+                    $logOwnId = $student->primaryParentId();
                     if($missingReasonsCount!=$classSubjectsCount){
                         $notificationUsers[] = $logOwnId;
                     }
@@ -894,7 +894,7 @@ class TeacherController extends Controller
                     $student = Students::with('user')->where('user_id',$unPublishedStudent)->first();
                     $message = "A new report has been published for ".$quarters->name;
 
-                    $logOwnId = $student->mother_id ?? $student->father_id;
+                    $logOwnId = $student->primaryParentId();
                     if($missingReasonsCount!=$classSubjectsCount){
                         $notificationUsers[] = $logOwnId;
                     }

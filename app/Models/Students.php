@@ -76,6 +76,45 @@ class Students extends Model
         return $this->belongsTo(Parents::class, 'guardian_id');
     }
 
+    /**
+     * Guardian slot for the relationship a parent picked when adding the child in the app
+     * (Father | Mother | Grand Father | Grand Mother | Legal Guardian). Unknown values fall
+     * back to the parent's gender.
+     */
+    public static function guardianSlot(?string $relationship, ?string $gender = null): string
+    {
+        switch (str_replace(' ', '', strtolower(trim((string) $relationship)))) {
+            case 'father':
+            case 'grandfather':
+                return 'father_id';
+            case 'mother':
+            case 'grandmother':
+                return 'mother_id';
+            case 'legalguardian':
+            case 'guardian':
+                return 'guardian_id';
+        }
+        return strtolower((string) $gender) === 'male' ? 'father_id' : 'mother_id';
+    }
+
+    /** User ids of the parents linked to this student (mobile app slots hold user ids). */
+    public function parentUserIds(): array {
+        return array_values(array_filter([$this->mother_id, $this->father_id, $this->guardian_id]));
+    }
+
+    /** The parent who gets per-student notification logs and school links. */
+    public function primaryParentId() {
+        return $this->mother_id ?? $this->father_id ?? $this->guardian_id;
+    }
+
+    public function scopeOfParent($query, $userId) {
+        return $query->where(function ($query) use ($userId) {
+            $query->where('father_id', $userId)
+                ->orWhere('mother_id', $userId)
+                ->orWhere('guardian_id', $userId);
+        });
+    }
+
     public function scopeOfTeacher($query) {
         $user = Auth::user();
         if ($user->hasRole('Teacher')) {
