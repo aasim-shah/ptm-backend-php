@@ -18,7 +18,10 @@ class EnforceAccountSecurity
         if ($request->routeIs('workspace.logout', 'logout') || $request->is('api/auth/signout', 'api/logout')) { return $next($request); }
         $active = User::where('id', $user->id)->where('status', 1)->first();
         if ($active && !$active->email_verified_at && $request->is('api/send/pincode', 'api/verify/pincode')) { return $next($request); }
-        if (!$active || !$active->email_verified_at) {
+        // AUTH_REQUIRE_EMAIL_VERIFICATION=false (staging) lets unverified accounts use the mobile API;
+        // the web panels always require a verified account.
+        $verified = $active && ($active->email_verified_at || ($api && !config('ptm.require_email_verification')));
+        if (!$verified) {
             abort(403, 'An active, verified account is required.');
         }
         $security = app(AccountSecurity::class); $state = $security->state($user);

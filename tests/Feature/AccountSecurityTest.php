@@ -102,9 +102,18 @@ class AccountSecurityTest extends TestCase
     }
     public function test_unverified_account_can_verify_but_not_read_private_data(): void
     {
+        config(['ptm.require_email_verification' => true]);
         $u = $this->account(); $u->update(['email_verified_at' => null]); $this->actingAs($u, 'sanctum');
         $this->getJson('/api/me/workspaces')->assertForbidden();
         // The enrollment middleware must let verification reach its own validator.
         $this->postJson('/api/verify/pincode', ['pincode' => 'invalid'])->assertOk()->assertJsonPath('status', 400);
+    }
+    public function test_unverified_account_uses_the_api_when_email_verification_is_off(): void
+    {
+        config(['ptm.require_email_verification' => false]);
+        $u = $this->account(); $u->update(['email_verified_at' => null]); $this->actingAs($u, 'sanctum');
+        $this->getJson('/api/auth/details')->assertOk();
+        $u->update(['status' => 0]);
+        $this->getJson('/api/auth/details')->assertForbidden();
     }
 }
