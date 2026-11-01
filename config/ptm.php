@@ -12,8 +12,8 @@ return [
     // can still suspend or end it.
     'role_require_approval' => (bool) env('ROLE_REQUIRE_APPROVAL', false),
 
-    // When true (the default), login gives no token until the email is verified with the OTP.
-    // Set to false on staging only, to test the app without the OTP screen. Users stay
+    // When false (the default), the app skips the email OTP: login gives a token and the mobile
+    // API accepts unverified accounts. Set to true to require the OTP again. Users stay
     // unverified (email_verified_at is never set here), so turning it back on makes them verify.
-    'require_email_verification' => (bool) env('AUTH_REQUIRE_EMAIL_VERIFICATION', true),
+    'require_email_verification' => (bool) env('AUTH_REQUIRE_EMAIL_VERIFICATION', false),
 ];
