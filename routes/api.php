@@ -47,6 +47,12 @@ Route::group(['prefix' => 'admin', 'middleware' => 'auth:sanctum'], function () 
     Route::put('role-requests/{id}/permissions', [\App\Http\Controllers\Api\RoleRequestAdminController::class, 'permissions']);
     Route::post('role-requests/{id}/{action}', [\App\Http\Controllers\Api\RoleRequestAdminController::class, 'decide'])
         ->where('action', 'approve|reject|suspend|reactivate|end');
+
+    // School Districts (Super Admin only)
+    Route::get('districts', [\App\Http\Controllers\Api\DistrictAdminController::class, 'index']);
+    Route::post('districts', [\App\Http\Controllers\Api\DistrictAdminController::class, 'store']);
+    Route::put('districts/{id}', [\App\Http\Controllers\Api\DistrictAdminController::class, 'update']);
+    Route::post('districts/{id}/schools', [\App\Http\Controllers\Api\DistrictAdminController::class, 'assignSchools']);
 });
 Route::any('add/school', [ApiController::class, 'postSchool'])->middleware('auth:sanctum');
 Route::get('get/teachers', [ApiController::class, 'getTeachers'])->middleware('auth:sanctum');

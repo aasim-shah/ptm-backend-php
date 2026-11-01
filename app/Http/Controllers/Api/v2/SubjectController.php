@@ -11,6 +11,7 @@ use App\Models\StudentSubject;
 use App\Models\Subject;
 use App\Models\SubjectTeacher;
 use App\Models\UserSchools;
+use App\Support\Access;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -263,11 +264,13 @@ class SubjectController
     public function subjects(){
 
         $user = Auth::user();
-        $userSchools = UserSchools::where('user_id',$user->id)->first();
-        Log::info($userSchools);
+        // With a role context use that context's school(s): Staff and Admins join through
+        // role requests and have no user_schools row. Legacy accounts keep their first school.
+        $schoolIds = Access::schoolIds($user)
+            ?? UserSchools::where('user_id', $user->id)->limit(1)->pluck('school_id')->toArray();
 
-        $subject = Subject::whereHas('schoolSubjects',function ($query) use ($userSchools){
-                $query->where('school_id',$userSchools->school_id);
+        $subject = Subject::whereHas('schoolSubjects',function ($query) use ($schoolIds){
+                $query->whereIn('school_id',$schoolIds);
             })->orderBy('name','ASC')->get();
         $response = array(
             'error' => false,

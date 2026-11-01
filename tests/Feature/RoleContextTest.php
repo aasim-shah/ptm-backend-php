@@ -477,4 +477,49 @@ class RoleContextTest extends TestCase
         $this->actAs($parent)->getJson('/api/get/schools?page=null&name=null')->assertOk()
             ->assertJsonPath('data.other_schools.current_page', 1);
     }
+
+    // ---------------------------------------------------------------- GET /subjects
+
+    private function schoolSubject(Schools $school, string $name): \App\Models\Subject
+    {
+        $subject = \App\Models\Subject::forceCreate(['name' => $name, 'bg_color' => '#000000']);
+        \App\Models\SchoolSubjects::forceCreate([
+            'id' => \App\Helpers\Utility::getUUID(), 'subject_id' => $subject->id, 'school_id' => $school->id,
+        ]);
+        return $subject;
+    }
+
+    public function test_staff_subjects_come_from_the_context_school(): void
+    {
+        $school = $this->makeSchool();
+        $other = $this->makeSchool();
+        $this->schoolSubject($school, 'Maths');
+        $this->schoolSubject($other, 'Art');
+        $staff = $this->makeUser('staff');
+        $context = $this->context($staff, 'staff', $school);
+
+        // Staff have no user_schools row; this used to be a 500.
+        $names = $this->actAs($staff, $context)->getJson('/api/subjects')->assertOk()->json('data.*.name');
+        $this->assertSame(['Maths'], $names);
+    }
+
+    public function test_district_admin_subjects_cover_the_district_schools(): void
+    {
+        $district = District::create(['name' => 'North', 'country_id' => $this->countryId]);
+        $inDistrict = $this->makeSchool(['district_id' => $district->id]);
+        $outside = $this->makeSchool();
+        $this->schoolSubject($inDistrict, 'Science');
+        $this->schoolSubject($outside, 'Music');
+        $admin = $this->makeUser('district_admin');
+        $context = $this->context($admin, 'district_admin', $district);
+
+        $names = $this->actAs($admin, $context)->getJson('/api/subjects')->assertOk()->json('data.*.name');
+        $this->assertSame(['Science'], $names);
+    }
+
+    public function test_user_without_any_school_gets_empty_subjects(): void
+    {
+        $parent = $this->makeUser('parent');
+        $this->actAs($parent)->getJson('/api/subjects')->assertOk()->assertJsonPath('data', []);
+    }
 }
