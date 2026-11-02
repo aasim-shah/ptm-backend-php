@@ -131,8 +131,10 @@
 .ws-caption { margin:24px 12px 11px; font-size:9px; }
 .ws-brand { font-size:21px; padding-bottom:22px; }
 .ws-sidebar-foot { line-height:1.7; }
+.ws-sidebar-foot .ws-role-badge { display:flex; align-items:center; gap:7px; margin-bottom:10px; padding:7px 10px; border-radius:9px; background:#ffffff14; color:#ffd36b; font-size:12px; font-weight:700; }
 .ws-topbar { padding:15px 36px; min-height:82px; background:#ffffffed; }
-.ws-context label { font-size:9px; color:#7c8ba3; letter-spacing:1px; margin-bottom:4px; display:block; }
+.ws-context label, .ws-context-label { font-size:9px; color:#7c8ba3; letter-spacing:1px; margin-bottom:4px; display:block; text-transform:uppercase; }
+.ws-context-current { display:block; color:#3a5071; font-size:14px; font-weight:600; }
 .ws-context select { background:#f6f8fc; border:1px solid #e4eaf4; border-radius:10px; padding:9px 12px; color:#3a5071; }
 .ws-account { gap:14px; }
 .ws-account-name { display:flex; align-items:center; gap:9px; font-size:12px; color:#425672!important; background:none!important; padding:0!important; }

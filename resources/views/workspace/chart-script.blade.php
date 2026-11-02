@@ -11,9 +11,10 @@ window.ptmChart = function (id, type, labels, datasets, options) {
     datasets.forEach(function (set, i) {
         var colour = set.colour || palette[i % palette.length];
         set.borderColor = colour;
-        set.backgroundColor = type === 'line' ? colour + '22' : colour;
+        set.backgroundColor = type === 'line' ? colour + '22' : (type === 'doughnut' ? (set.colours || set.data.map(function (_, j) { return palette[j % palette.length]; })) : colour);
+        if (type === 'doughnut') { set.borderColor = '#fff'; }
         set.pointRadius = type === 'line' ? 2 : undefined;
-        set.borderWidth = type === 'line' ? 2 : 0;
+        set.borderWidth = type === 'line' || type === 'doughnut' ? 2 : 0;
         set.lineTension = 0.3;
         set.fill = type === 'line' && i === 0;
     });
@@ -23,7 +24,7 @@ window.ptmChart = function (id, type, labels, datasets, options) {
         options: {
             responsive: true, maintainAspectRatio: false, animation: {duration: 300},
             legend: {position: 'bottom', labels: {boxWidth: 10, fontSize: 11}},
-            tooltips: {mode: 'index', intersect: false},
+            tooltips: type === 'doughnut' ? {} : {mode: 'index', intersect: false},
             scales: type === 'doughnut' ? {} : {
                 xAxes: [{stacked: stacked, gridLines: {display: false}, ticks: {fontSize: 10, maxRotation: 0, autoSkip: true}}],
                 yAxes: [{stacked: stacked, ticks: {beginAtZero: true, precision: 0, fontSize: 10}, gridLines: {color: '#eef2f8'}}]

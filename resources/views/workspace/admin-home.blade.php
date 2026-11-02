@@ -2,7 +2,12 @@
     $chart = $overview['chart'];
     $video = $overview['video'];
     $roleLabels = \App\Services\WorkspaceAccess::LABELS;
-    $scopeName = ['super_admin' => 'Platform', 'sub_super_admin' => 'Assigned organizations', 'district_admin' => 'District', 'school_admin' => 'School'][$context['role']];
+    // Chart titles follow the client's per-panel reference mockups.
+    [$growthTitle, $activityTitle] = ['super_admin' => ['User growth', 'Platform activity'], 'sub_super_admin' => ['Organization growth', 'User activity'],
+        'district_admin' => ['School enrollment', 'Engagement overview'], 'school_admin' => ['Student enrollment', 'Activity overview']][$context['role']];
+    $completion = $overview['completion'];
+    $breakdown = $overview['breakdown'];
+    $completionRate = array_sum($completion) ? round($completion['published'] / array_sum($completion) * 100) : null;
 @endphp
 <section class="ws-card ws-video-center" aria-labelledby="video-center-title">
     <div class="ws-video-center__intro">
@@ -22,12 +27,18 @@
 </section>
 
 <div class="ws-chart-grid">
-    <section class="ws-card ws-chart-card"><div class="ws-card-heading"><h2>{{ $context['role'] === 'super_admin' ? 'User growth' : ($context['role'] === 'school_admin' ? 'Student & family enrollment' : 'School enrollment') }} <small>last 6 months</small></h2>@if($access->can($context, 'analytics.view'))<a href="{{ $url('analytics') }}">Analytics →</a>@endif</div>
+    <section class="ws-card ws-chart-card"><div class="ws-card-heading"><h2>{{ $growthTitle }} <small>last 6 months</small></h2>@if($access->can($context, 'analytics.view'))<a href="{{ $url('analytics') }}">Analytics →</a>@endif</div>
         <div class="ws-chart"><canvas id="chart-growth" role="img" aria-label="New registrations and active users per month"></canvas></div></section>
-    <section class="ws-card ws-chart-card"><div class="ws-card-heading"><h2>{{ $scopeName }} activity <small>last 6 months</small></h2>@if($access->can($context, 'analytics.view'))<a href="{{ $url('analytics') }}">Analytics →</a>@endif</div>
+    <section class="ws-card ws-chart-card"><div class="ws-card-heading"><h2>{{ $activityTitle }} <small>last 6 months</small></h2>@if($access->can($context, 'analytics.view'))<a href="{{ $url('analytics') }}">Analytics →</a>@endif</div>
         <div class="ws-chart"><canvas id="chart-activity" role="img" aria-label="Messages, meetings, announcements, events and student updates per month"></canvas></div></section>
     <section class="ws-card ws-chart-card"><div class="ws-card-heading"><h2>Video call minutes <small>last 6 months</small></h2><a href="{{ $url('video') }}">Video →</a></div>
         <div class="ws-chart"><canvas id="chart-video" role="img" aria-label="Video call minutes per month"></canvas></div></section>
+</div>
+<div class="ws-chart-grid ws-chart-grid--two">
+    <section class="ws-card ws-chart-card"><div class="ws-card-heading"><h2>{{ $breakdown['title'] }} <small>students{{ $breakdown['classes'] !== null ? ' and classes' : '' }}</small></h2>@if($access->can($context, 'reports.export'))<a href="{{ $url('reports') }}">Reports →</a>@endif</div>
+        @if($breakdown['labels'])<div class="ws-chart"><canvas id="chart-breakdown" role="img" aria-label="{{ $breakdown['title'] }}"></canvas></div>@else<p class="ws-empty-line">No classes set up yet.</p>@endif</section>
+    <section class="ws-card ws-chart-card"><div class="ws-card-heading"><h2>Report completion <small>student updates, last 6 months</small></h2>@if($completionRate !== null)<span class="ws-badge">{{ $completionRate }}% published</span>@endif</div>
+        @if(array_sum($completion))<div class="ws-chart"><canvas id="chart-completion" role="img" aria-label="Published and draft student updates"></canvas></div>@else<p class="ws-empty-line">No student updates in the last 6 months.</p>@endif</section>
 </div>
 
 <div class="ws-grid ws-grid--even">
@@ -37,7 +48,7 @@
         @endforeach
     </section>
     <section class="ws-card" aria-labelledby="signups-title"><div class="ws-card-heading"><h2 id="signups-title">Recent sign ups</h2>@if($access->can($context, 'memberships.manage'))<a href="{{ $url('people') }}">View all →</a>@endif</div>
-        <div class="ws-table-wrap"><table><thead><tr><th>Name</th><th>User type</th><th>School</th><th>Joined</th><th>Status</th></tr></thead><tbody>
+        <div class="ws-table-wrap"><table><thead><tr><th>Name</th><th>User type</th><th>Organization</th><th>Joined</th><th>Status</th></tr></thead><tbody>
         @forelse($overview['signups'] as $signup)
             @php $status = (int) $signup->account_status !== 1 ? 'Disabled' : (!$signup->email_verified_at ? 'Unverified' : ucfirst($signup->status)); @endphp
             <tr><td>{{ $signup->first_name }} {{ $signup->last_name }}</td><td><span class="ws-badge">{{ $roleLabels[$signup->role] ?? $signup->role }}</span></td><td>{{ $signup->school_name }}</td><td>{{ $signup->created_at ? $formatTime($signup->created_at, 'j M Y') : '—' }}</td><td><span class="ws-status ws-status--{{ strtolower($status) }}">{{ $status }}</span></td></tr>
@@ -67,6 +78,11 @@
     ptmChart('chart-growth', 'line', c.labels, [{label: 'New registrations', data: c.registrations}, {label: 'Active users', data: c.active_users}]);
     ptmChart('chart-activity', 'bar', c.labels, [{label: 'Messages', data: c.messages}, {label: 'Meetings', data: c.meetings}, {label: 'Announcements', data: c.announcements}, {label: 'Events', data: c.events}, {label: 'Student updates', data: c.updates}], {stacked: true});
     ptmChart('chart-video', 'bar', c.labels, [{label: 'Minutes', data: c.video_minutes, colour: '#7b4fd6'}]);
+    var b = @json($breakdown), done = @json($completion);
+    var sets = [{label: 'Students', data: b.students}];
+    if (b.classes) { sets.push({label: 'Classes', data: b.classes}); }
+    ptmChart('chart-breakdown', 'bar', b.labels, sets);
+    ptmChart('chart-completion', 'doughnut', ['Published', 'Draft'], [{data: [done.published, done.draft], colours: ['#16a36a', '#d9dee8']}]);
 })();
 </script>
 @endpush

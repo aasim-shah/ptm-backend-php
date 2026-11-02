@@ -51,17 +51,56 @@ class WorkspaceAnalytics
             ->distinct()->count('m.user_id');
     }
 
-    /** The six primary KPI cards shared by all four administrative panels. */
+    /** Six primary KPI cards: four shared people counts, then two that suit the panel's scope. */
     public function kpis(array $context, int $students): array
     {
-        return [
+        $cards = [
             ['key' => 'parents', 'label' => 'Parents / Guardians', 'value' => $this->members($context, 'parent'), 'icon' => 'users'],
             ['key' => 'teachers', 'label' => 'Teachers', 'value' => $this->members($context, 'teacher'), 'icon' => 'user'],
             ['key' => 'staff', 'label' => 'Staff', 'value' => $this->members($context, 'staff'), 'icon' => 'id-badge'],
             ['key' => 'students', 'label' => 'Students', 'value' => $students, 'icon' => 'graduation-cap'],
-            ['key' => 'schools', 'label' => 'Schools', 'value' => count($context['schools']), 'icon' => 'university'],
-            ['key' => 'districts', 'label' => 'Districts', 'value' => $this->districtCount($context), 'icon' => 'map-o'],
         ];
+        $schools = ['key' => 'schools', 'label' => 'Schools', 'value' => count($context['schools']), 'icon' => 'university'];
+        $classes = ['key' => 'classes', 'label' => 'Classes', 'value' => $this->classCount($context), 'icon' => 'book'];
+        return array_merge($cards, match ($context['role']) {
+            'school_admin' => [$classes, ['key' => 'meetings', 'label' => 'Upcoming meetings', 'value' => $this->upcomingMeetings($context), 'icon' => 'calendar']],
+            'district_admin' => [$schools, $classes],
+            default => [$schools, ['key' => 'districts', 'label' => 'Districts', 'value' => $this->districtCount($context), 'icon' => 'map-o']],
+        });
+    }
+
+    public function classCount(array $context): int
+    {
+        return DB::table('classes')->whereIn('school_id', $this->schools($context))->whereNull('deleted_at')->count();
+    }
+
+    public function upcomingMeetings(array $context): int
+    {
+        return DB::table('workspace_appointments')->whereIn('school_id', $this->schools($context))->where('starts_at', '>=', now())->whereIn('status', ['pending', 'accepted'])->count();
+    }
+
+    /** Student updates by status over the window: the "report completion" view. */
+    public function reportCompletion(array $context, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $counts = DB::table('workspace_updates')->whereIn('school_id', $this->schools($context))->whereBetween('updated_at', [$from, $to])
+            ->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        return ['published' => (int) ($counts['published'] ?? 0), 'draft' => (int) $counts->except('published')->sum()];
+    }
+
+    /** Students and classes per school (top 8 by students); a School Admin sees students per class instead. */
+    public function breakdown(array $context): array
+    {
+        $base = DB::table('classes as c')->leftJoin('class_sections as cs', fn ($j) => $j->on('cs.class_id', '=', 'c.id')->whereNull('cs.deleted_at'))
+            ->leftJoin('students as s', 's.class_section_id', '=', 'cs.id')
+            ->leftJoin('users as u', fn ($j) => $j->on('u.id', '=', 's.user_id')->where('u.status', 1))
+            ->whereIn('c.school_id', $this->schools($context))->whereNull('c.deleted_at');
+        if ($context['role'] === 'school_admin') {
+            $rows = $base->groupBy('c.id', 'c.name')->selectRaw('c.name as label, COUNT(DISTINCT u.id) as students')->orderByDesc('students')->limit(8)->get();
+            return ['title' => 'Students by class', 'labels' => $rows->pluck('label')->all(), 'students' => $rows->pluck('students')->map(fn ($v) => (int) $v)->all(), 'classes' => null];
+        }
+        $rows = $base->groupBy('c.school_id')->selectRaw('c.school_id, COUNT(DISTINCT u.id) as students, COUNT(DISTINCT c.id) as classes')->orderByDesc('students')->limit(8)->get();
+        return ['title' => 'Schools & classes', 'labels' => $rows->map(fn ($r) => $context['schools'][$r->school_id] ?? '#'.$r->school_id)->all(),
+            'students' => $rows->pluck('students')->map(fn ($v) => (int) $v)->all(), 'classes' => $rows->pluck('classes')->map(fn ($v) => (int) $v)->all()];
     }
 
     /** Work that needs an administrator's decision, each linked to the page that resolves it. */

@@ -75,7 +75,8 @@ class DashboardController extends Controller
             $analytics = app(\App\Services\WorkspaceAnalytics::class);
             [$from, $to, $grain] = $analytics->window(now()->subMonths(5)->startOfMonth()->toDateString(), null, 'month');
             $overview = ['attention' => $analytics->attention($context, $request->user()), 'signups' => $analytics->recentSignups($context),
-                'chart' => $analytics->series($context, $from, $to, $grain), 'upcoming' => DB::table('workspace_appointments')->whereIn('school_id', array_keys($context['schools']))->where('starts_at', '>=', now())->whereIn('status', ['pending', 'accepted'])->count(),
+                'chart' => $analytics->series($context, $from, $to, $grain), 'upcoming' => $analytics->upcomingMeetings($context),
+                'completion' => $analytics->reportCompletion($context, $from, $to), 'breakdown' => $analytics->breakdown($context),
                 'video' => $analytics->totals($context, now()->startOfMonth()->toImmutable(), now()->endOfDay()->toImmutable())];
         }
         if ($page === 'people') {

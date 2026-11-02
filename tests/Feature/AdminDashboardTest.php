@@ -61,7 +61,7 @@ class AdminDashboardTest extends TestCase
             $this->actingAs($user)->get('/dashboard?context='.$context)->assertOk()
                 ->assertSeeInOrder(['Dashboard', 'Video Calls', 'Parents / Guardians', 'Teachers', 'Staff', 'Students', 'Communications', 'Analytics &amp; Insights', 'Reports &amp; Exports', 'Settings'], false)
                 ->assertSee('Video Communication Center')->assertSee('Attention needed')->assertSee('Recent sign ups')->assertSee('Jessica')
-                ->assertSee('chart-growth')->assertSee('Parents / Guardians')->assertSee('Districts');
+                ->assertSee('chart-growth')->assertSee('chart-video')->assertSee('Report completion')->assertSee('Parents / Guardians')->assertSee('Organization');
         }
     }
 
@@ -227,5 +227,49 @@ class AdminDashboardTest extends TestCase
             $this->actingAs($user)->get('/dashboard/video?context='.$context)->assertOk()->assertSee('Video Communication Center');
             $this->get('/dashboard/audit?context='.$context)->assertOk()->assertSee('Audit / Activity Log');
         }
+    }
+
+    public function test_role_switcher_shows_only_when_a_non_super_user_has_several_workspaces(): void
+    {
+        $school = $this->school('Lincoln Elementary'); $other = $this->school('Roosevelt High');
+        [$super] = $this->panels($school)['super_admin'];
+        $this->membership($super, $school, 'school_admin');
+        $this->actingAs($super)->get('/dashboard?context=platform')->assertOk()->assertDontSee('id="workspace-context"', false)->assertSee('Full platform');
+
+        $single = $this->user('Solo'); $context = $this->membership($single, $school, 'school_admin');
+        $this->actingAs($single)->get('/dashboard?context='.$context)->assertOk()->assertDontSee('id="workspace-context"', false);
+
+        $this->membership($single, $other, 'school_admin');
+        $this->actingAs($single)->get('/dashboard?context='.$context)->assertOk()->assertSee('id="workspace-context"', false);
+    }
+
+    public function test_kpi_cards_and_chart_titles_follow_each_panel(): void
+    {
+        $school = $this->school('Lincoln Elementary');
+        $class = DB::table('classes')->insertGetId(['name' => 'Grade 4', 'medium_id' => 1, 'school_id' => $school]);
+        $expected = [
+            'super_admin' => [['Schools', 'Districts'], 'User growth', 'Platform activity', 'Schools &amp; classes'],
+            'sub_super_admin' => [['Schools', 'Districts'], 'Organization growth', 'User activity', 'Schools &amp; classes'],
+            'district_admin' => [['Schools', 'Classes'], 'School enrollment', 'Engagement overview', 'Schools &amp; classes'],
+            'school_admin' => [['Classes', 'Upcoming meetings'], 'Student enrollment', 'Activity overview', 'Students by class'],
+        ];
+        $panels = $this->panels($school);
+        foreach ($panels as $role => [$user, $context]) {
+            [$cards, $growth, $activity, $breakdown] = $expected[$role];
+            $summary = $this->actingAs($user)->getJson('/dashboard?context='.$context)->assertOk()->json('summary');
+            $this->assertSame(['Parents / Guardians', 'Teachers', 'Staff', 'Students', ...$cards], array_column($summary, 'label'), $role);
+            $this->get('/dashboard?context='.$context)->assertOk()->assertSeeInOrder([$growth, $activity, $breakdown, 'Report completion'], false);
+        }
+        [$principal, $schoolContext] = $panels['school_admin'];
+        $this->assertSame(1, collect($this->actingAs($principal)->getJson('/dashboard?context='.$schoolContext)->json('summary'))->firstWhere('key', 'classes')['value']);
+    }
+
+    public function test_existing_sub_super_admins_get_analytics_and_reports_by_default(): void
+    {
+        $school = $this->school('Delegated');
+        $delegate = $this->user('Delegate'); $id = (int) substr($this->membership($delegate, $school, 'sub_super_admin', ['notices.publish']), 1);
+        (require database_path('migrations/2026_11_03_000002_default_sub_super_admin_insights.php'))->up();
+        $this->assertEqualsCanonicalizing(['notices.publish', 'analytics.view', 'reports.export'], json_decode(DB::table('workspace_memberships')->where('id', $id)->value('permissions'), true));
+        $this->actingAs($delegate)->get('/dashboard?context=m'.$id)->assertSee('Analytics &amp; Insights', false)->assertSee('Reports &amp; Exports', false);
     }
 }

@@ -78,14 +78,19 @@
     <nav>@foreach($extra as $key => $label)<a href="{{ $url($key) }}" @if($page === $key) aria-current="page" @endif><i class="fa fa-{{ $icons[$key] }}" aria-hidden="true"></i><span>{{ $label }}</span></a>@endforeach</nav>
     @endif
     @if(auth()->user()->hasRole('Super Admin'))<a class="ws-legacy" href="{{ route('home') }}">Classic admin tools ↗</a>@endif
-    <div class="ws-sidebar-foot">Together, brighter futures.<br><span>Parent Teacher Mobile</span></div>
+    <div class="ws-sidebar-foot">@if($admin)<span class="ws-role-badge"><i class="fa fa-{{ $context['role'] === 'super_admin' ? 'star' : 'shield' }}" aria-hidden="true"></i>{{ $context['label'] }}</span>@endif Together, brighter futures.<br><span>Parent Teacher Mobile · Version {{ config('app.version') }}</span></div>
 </aside>
 <div class="ws-shell">
     <header class="ws-topbar">
+        {{-- Super Admin already covers the full platform, and a single workspace has nothing to switch to. --}}
+        @if(count($contexts) > 1 && $context['role'] !== 'super_admin')
         <form method="post" action="{{ route('workspace.select') }}" class="ws-context">@csrf
             <label for="workspace-context">Role & organization</label>
             <div><select id="workspace-context" name="context">@foreach($contexts as $option)<option value="{{ $option['id'] }}" @selected($option['id'] === $context['id'])>{{ $option['label'] }} · {{ $option['organization'] }}</option>@endforeach</select><button type="submit" class="ws-btn ws-btn-small">Switch</button></div>
         </form>
+        @else
+        <div class="ws-context"><span class="ws-context-label">Role & organization</span><strong class="ws-context-current">{{ $context['label'] }} · {{ $context['organization'] }}</strong></div>
+        @endif
         <div class="ws-account"><a class="ws-notification-link" href="{{ route('workspace.notifications') }}" aria-label="Notifications" title="Notifications"><i class="fa fa-bell-o" aria-hidden="true"></i></a><a class="ws-account-name" href="{{ $url('profile') }}"><span class="ws-account-initial" aria-hidden="true">{{ mb_strtoupper(mb_substr(auth()->user()->first_name,0,1).mb_substr(auth()->user()->last_name,0,1)) }}</span><span>{{ auth()->user()->first_name }}</span></a><form method="post" action="{{ route('workspace.logout') }}">@csrf<button class="ws-link" type="submit">Sign out</button></form></div>
     </header>
     <main id="main" tabindex="-1" class="ws-main">
