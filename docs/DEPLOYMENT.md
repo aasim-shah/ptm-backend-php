@@ -197,3 +197,13 @@ Before the change, a backup was written to `/root/ptm-deploy-backups/20261102T18
 Post-deploy checks: app, worker and scheduler report healthy; `workspace:health` is healthy; the five new `/dashboard/*` routes are registered; public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; Postiz still responds. Locally, 97 tests passed against the combined code. The hosted review-account passwords recorded in `/root/ptm-deploy-backups` no longer match (the accounts were updated on 25 and 28 October), so no signed-in hosted check was possible.
 
 Delegated Sub-Super Admins see Analytics & Insights only after a Super Admin grants the new `analytics.view` permission.
+
+## 14. Exports, support and trial fix — 2 November 2026
+
+Deployed branch `admin-dashboards` at commit `0b980aa` to the active `/root/ptm-candidate` stack. Before the change, the server copies of the files not touched by section 13 were checked against `b23fdd5`, and the 35 changed application files were copied with rsync. The server-specific `docker-compose.prod.yml` and environment files were not changed.
+
+Before the change, a backup was written to `/root/ptm-deploy-backups/20261102T191152Z-0b980aa`: the `ptm` database dump, the environment and Compose files, the source tarball, and the rollback image id (also tagged `ptm-backend:before-0b980aa`). The image was rebuilt with `WITH_GRPC=0` and the containers recreated with `up -d`. The additive migration `2026_11_03_000001_create_workspace_exports_and_support` ran on start and creates `workspace_exports`, `workspace_support_tickets` and `workspace_support_replies`.
+
+The server's `.env.production` has no `TRAIL`, `TRAIL_DAYS`, `TRAIL_CALL_COUNT` or `PREMIUM_CALL_COUNT`, which had made trial creation fail on registration (`call_count cannot be null`). The config now defaults them to 60, 5, 5 and 100; set real plan values in `.env.production` when they are decided.
+
+Post-deploy checks: app, worker and scheduler report healthy; `workspace:health` is healthy; `workspace:prune-exports` is scheduled hourly; public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; no new errors in the Laravel log; Postiz still responds. Locally, 102 tests passed.
