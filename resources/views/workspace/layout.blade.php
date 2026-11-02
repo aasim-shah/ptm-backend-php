@@ -21,19 +21,63 @@
     if (in_array($context['role'], ['teacher', 'school_admin', 'district_admin', 'super_admin']) || $access->can($context, 'academics.manage')) { $extra['classes'] = $context['role'] === 'teacher' ? 'My classes' : 'Academic structure'; }
     $extra['notices'] = 'Announcements';
     $extra['files'] = 'Attachments';
+    $extra['support'] = 'Support'; $icons['support'] = 'life-ring';
     if ($access->can($context, 'memberships.manage')) { $extra['people'] = 'People & access'; }
     if (in_array($context['role'], ['super_admin', 'sub_super_admin', 'school_admin', 'district_admin'])) {
         $extra['administration'] = 'Organizations & reports'; $icons['administration'] = 'university';
     }
-    $url = fn($target) => route('workspace.page', ['page' => $target, 'context' => $context['id']]);
+    $url = fn($target, $query = []) => route('workspace.page', ['page' => $target, 'context' => $context['id']] + $query);
+    // The four administrative panels share one admin menu in the approved reference order; items the
+    // context cannot use are hidden here and every page still re-authorizes on the server.
+    $admin = in_array($context['role'], \App\Services\WorkspaceAnalytics::ADMIN_ROLES, true);
+    if ($admin) {
+        $role = $context['role'];
+        $item = fn($label, $icon, $target, $query = [], $fragment = '', $current = null) => ['label' => $label, 'icon' => $icon,
+            'url' => $url($target, $query).$fragment, 'current' => $current ?? ($page === $target && (request('role') ?? '') === ($query['role'] ?? ''))];
+        $adminNav = array_filter([
+            $item('Dashboard', 'th-large', 'home'),
+            $item('Video Calls', 'video-camera', 'video'),
+            $access->can($context, 'memberships.manage') ? $item('Parents / Guardians', 'users', 'people', ['role' => 'parent']) : null,
+            $access->can($context, 'memberships.manage') ? $item('Teachers', 'user', 'people', ['role' => 'teacher']) : null,
+            $access->can($context, 'memberships.manage') ? $item('Staff', 'id-badge', 'people', ['role' => 'staff']) : null,
+            $access->can($context, 'students.view') ? $item('Students', 'graduation-cap', 'students') : null,
+            $item($role === 'school_admin' ? 'School' : 'Schools', 'university', 'administration', [], '#schools'),
+            in_array($role, ['super_admin', 'sub_super_admin', 'district_admin']) ? $item('Districts', 'map-o', 'administration', [], '#districts', false) : null,
+            in_array($role, ['super_admin', 'district_admin']) ? $item('Administrators', 'user-secret', 'administration', [], '#administrators', false) : null,
+            $role === 'super_admin' ? $item('Sub Super Admins', 'sitemap', 'administration', [], '#sub-super-admins', false) : null,
+            $item('Communications', 'bullhorn', 'notices'),
+            $access->can($context, 'analytics.view') ? $item('Analytics & Insights', 'bar-chart', 'analytics') : null,
+            $access->can($context, 'reports.export') ? $item('Reports & Exports', 'file-text-o', 'reports') : null,
+            $role === 'super_admin' ? $item('Subscriptions & Billing', 'credit-card', 'billing') : null,
+            $item('Support', 'life-ring', 'support'),
+            $access->can($context, 'audit.view') ? $item('Audit / Activity Log', 'history', 'audit') : null,
+            $item('Settings', 'cog', 'profile'),
+        ]);
+        $workspaceNav = array_filter([
+            $item('Messages', 'comments', 'messages'),
+            $item('Schedule', 'calendar', 'schedule'),
+            $item('Events', 'star', 'events'),
+            in_array($role, ['school_admin', 'district_admin', 'super_admin']) || $access->can($context, 'academics.manage') ? $item('Academic structure', 'book', 'classes') : null,
+            $access->can($context, 'students.view') ? $item('Student updates', 'file-text', 'updates') : null,
+            $access->can($context, 'memberships.manage') ? $item('People & access', 'address-book-o', 'people') : null,
+            $item('Attachments', 'paperclip', 'files'),
+        ]);
+    }
 @endphp
 <aside class="ws-sidebar" aria-label="Workspace navigation">
     <a class="ws-brand" href="{{ $url('home') }}">Parent Teacher <span>Mobile</span></a>
+    @if($admin)
+    <p class="ws-caption">{{ strtoupper($context['label']) }}</p>
+    <nav class="ws-admin-nav">@foreach($adminNav as $link)<a href="{{ $link['url'] }}" @if($link['current']) aria-current="page" @endif><i class="fa fa-{{ $link['icon'] }}" aria-hidden="true"></i><span>{{ $link['label'] }}</span></a>@endforeach</nav>
+    <p class="ws-caption">YOUR WORKSPACE</p>
+    <nav>@foreach($workspaceNav as $link)<a href="{{ $link['url'] }}" @if($link['current']) aria-current="page" @endif><i class="fa fa-{{ $link['icon'] }}" aria-hidden="true"></i><span>{{ $link['label'] }}</span></a>@endforeach</nav>
+    @else
     <p class="ws-caption">YOUR WORKSPACE</p>
     <nav>@foreach($nav as $key => $label)<a href="{{ $url($key) }}" @if($page === $key) aria-current="page" @endif><i class="fa fa-{{ $icons[$key] }}" aria-hidden="true"></i><span>{{ $label }}</span></a>@endforeach</nav>
     <p class="ws-caption">{{ strtoupper($context['label']) }}</p>
     <nav>@foreach($extra as $key => $label)<a href="{{ $url($key) }}" @if($page === $key) aria-current="page" @endif><i class="fa fa-{{ $icons[$key] }}" aria-hidden="true"></i><span>{{ $label }}</span></a>@endforeach</nav>
-    @if(auth()->user()->hasRole('Super Admin'))<a class="ws-legacy" href="{{ route('home') }}">Existing admin panel ↗</a>@endif
+    @endif
+    @if(auth()->user()->hasRole('Super Admin'))<a class="ws-legacy" href="{{ route('home') }}">Classic admin tools ↗</a>@endif
     <div class="ws-sidebar-foot">Together, brighter futures.<br><span>Parent Teacher Mobile</span></div>
 </aside>
 <div class="ws-shell">
@@ -52,5 +96,6 @@
     <footer class="ws-footer">{{ $context['organization'] }} <span>·</span> {{ $context['label'] }}</footer>
 </div>
 <nav class="ws-mobile-nav" aria-label="Primary navigation">@foreach($nav as $key => $label)<a href="{{ $url($key) }}" @if($page === $key) aria-current="page" @endif><i class="fa fa-{{ $icons[$key] }}" aria-hidden="true"></i><span>{{ $label }}</span></a>@endforeach</nav>
+@stack('workspace-scripts')
 </body>
 </html>

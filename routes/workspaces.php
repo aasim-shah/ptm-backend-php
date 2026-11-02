@@ -19,6 +19,18 @@ Route::middleware(['auth:web', \App\Http\Middleware\AdministrativeWorkspace::cla
     Route::post('/workspace/delegations/{id}/revoke', [\App\Http\Controllers\Workspace\AdministrationController::class, 'revoke'])->name('workspace.delegation-revoke');
     Route::post('/workspace/ad-free', [\App\Http\Controllers\Workspace\AdministrationController::class, 'requestAdFree'])->name('workspace.ad-free');
     Route::post('/workspace/ad-free/{id}/review', [\App\Http\Controllers\Workspace\AdministrationController::class, 'decideAdFree'])->name('workspace.ad-free-review');
+    Route::get('/dashboard/analytics', [\App\Http\Controllers\Workspace\InsightsController::class, 'analytics'])->name('workspace.analytics');
+    Route::get('/dashboard/reports', [\App\Http\Controllers\Workspace\InsightsController::class, 'reports'])->name('workspace.reports');
+    Route::post('/workspace/reports/exports', [\App\Http\Controllers\Workspace\InsightsController::class, 'requestExport'])->middleware('throttle:20,1')->name('workspace.report-export');
+    Route::get('/workspace/reports/exports/{id}', [\App\Http\Controllers\Workspace\InsightsController::class, 'exportFile'])->middleware('throttle:30,1')->name('workspace.report-file');
+    Route::get('/dashboard/video', [\App\Http\Controllers\Workspace\InsightsController::class, 'video'])->name('workspace.video');
+    Route::get('/dashboard/audit', [\App\Http\Controllers\Workspace\InsightsController::class, 'audit'])->name('workspace.audit');
+    Route::get('/dashboard/billing', [\App\Http\Controllers\Workspace\InsightsController::class, 'billing'])->name('workspace.billing');
+    Route::get('/dashboard/support', [\App\Http\Controllers\Workspace\SupportController::class, 'index'])->name('workspace.support');
+    Route::get('/dashboard/support/{id}', [\App\Http\Controllers\Workspace\SupportController::class, 'show'])->whereNumber('id')->name('workspace.support-ticket');
+    Route::post('/workspace/support', [\App\Http\Controllers\Workspace\SupportController::class, 'store'])->middleware('throttle:10,1')->name('workspace.support-store');
+    Route::post('/workspace/support/{id}/replies', [\App\Http\Controllers\Workspace\SupportController::class, 'reply'])->middleware('throttle:30,1')->name('workspace.support-reply');
+    Route::post('/workspace/support/{id}/status', [\App\Http\Controllers\Workspace\SupportController::class, 'status'])->name('workspace.support-status');
     Route::get('/dashboard/{page}', [DashboardController::class, 'index'])->name('workspace.page');
     Route::post('/workspace/select', [DashboardController::class, 'select'])->name('workspace.select');
     Route::post('/workspace/classes', [DashboardController::class, 'classSection'])->name('workspace.classes');

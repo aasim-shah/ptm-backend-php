@@ -62,21 +62,13 @@ class WorkspaceDashboard
             ['label' => 'Unread messages', 'value' => (clone $messages)->where('m.recipient_id', $user->id)->whereNull('m.read_at')->count()],
             ['label' => 'Upcoming meetings', 'value' => (clone $appointments)->where('starts_at', '>=', now())->whereIn('status', ['pending', 'accepted'])->count()],
         ];
-        if ($context['role'] === 'teacher') {
+        if (in_array($context['role'], WorkspaceAnalytics::ADMIN_ROLES, true)) {
+            // All four administrative panels share the same six KPI cards.
+            $stats = app(WorkspaceAnalytics::class)->kpis($context, (clone $students)->count());
+        } elseif ($context['role'] === 'teacher') {
             $stats[] = ['label' => 'Draft student updates', 'value' => (clone $updates)->where('u.status', 'draft')->count()];
-        } elseif (in_array($context['role'], ['school_admin', 'district_admin', 'super_admin', 'sub_super_admin'])) {
-            $stats[] = ['label' => 'Schools', 'value' => count($context['schools'])];
         } else {
             $stats[] = ['label' => 'School notices', 'value' => $this->posts($context, 'notice')->count()];
-        }
-        if (in_array($context['role'], ['super_admin', 'sub_super_admin', 'school_admin', 'district_admin'])) {
-            foreach (['parent' => 'Parents', 'teacher' => 'Teachers', 'staff' => 'Staff'] as $role => $label) {
-                $stats[] = ['label' => 'Connected '.$label, 'value' => DB::table('workspace_memberships as m')->join('users as member', 'member.id', '=', 'm.user_id')
-                    ->whereIn('m.school_id', array_keys($context['schools']))->where('m.role', $role)->where('m.status', 'active')
-                    ->where('member.status', 1)->whereNull('member.deleted_at')->whereNotNull('member.email_verified_at')
-                    ->where(fn ($q) => $q->whereNull('m.starts_at')->orWhere('m.starts_at', '<=', now()))
-                    ->where(fn ($q) => $q->whereNull('m.ends_at')->orWhere('m.ends_at', '>', now()))->distinct()->count('m.user_id')];
-            }
         }
         $capabilities = [];
         foreach (['students.view', 'updates.write', 'notices.publish', 'events.manage', 'memberships.manage', 'academics.manage'] as $permission) {

@@ -12,7 +12,7 @@ class WorkspaceAccess
 {
     public const LABELS = ['parent' => 'Parent', 'teacher' => 'Teacher', 'staff' => 'Staff Member',
         'school_admin' => 'School Admin', 'district_admin' => 'District Admin', 'sub_super_admin' => 'Sub-Super Admin', 'super_admin' => 'Super Admin'];
-    public const DELEGATED_PERMISSIONS = ['students.view', 'notices.publish', 'events.manage', 'memberships.manage', 'academics.manage', 'reports.export', 'audit.view'];
+    public const DELEGATED_PERMISSIONS = ['students.view', 'notices.publish', 'events.manage', 'memberships.manage', 'academics.manage', 'reports.export', 'audit.view', 'analytics.view', 'support.manage'];
     public const STAFF_PERMISSIONS = ['web.access', 'students.view', 'notices.publish', 'events.manage'];
 
     public function memberships(User $user)

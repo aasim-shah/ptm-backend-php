@@ -41,6 +41,11 @@ class AdministrationController extends Controller
             'page' => 'administration', 'schools' => $schools, 'districts' => $districts,
             'requests' => $requests->orderByDesc('id')->limit(100)->get(),
             'audit' => $mayAudit ? $audit->orderByDesc('id')->limit(100)->get() : collect(),
+            'admins' => in_array($context['role'], ['super_admin', 'district_admin']) ? DB::table('workspace_memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')
+                ->leftJoin('schools as s', 's.id', '=', 'm.school_id')->leftJoin('workspace_districts as d', 'd.id', '=', 'm.district_id')
+                ->whereIn('m.role', ['school_admin', 'district_admin'])->whereNull('u.deleted_at')
+                ->where(fn ($q) => $q->whereIn('m.school_id', $schools->pluck('id'))->orWhereIn('m.district_id', $districts->pluck('id')))
+                ->select('m.role', 'm.status', 'u.first_name', 'u.last_name', 's.school_name', 'd.name as district_name')->orderBy('u.last_name')->limit(200)->get() : collect(),
             'delegations' => $context['role'] === 'super_admin' ? DB::table('workspace_memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')->where('m.role', 'sub_super_admin')->select('m.*', 'u.email')->get() : collect(),
         ]);
     }

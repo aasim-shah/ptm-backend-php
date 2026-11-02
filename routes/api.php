@@ -366,4 +366,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('workspace/notifications', [\App\Http\Controllers\Workspace\NotificationsController::class, 'index']);
     Route::post('workspace/notifications/{id}/read', [\App\Http\Controllers\Workspace\NotificationsController::class, 'read']);
     Route::post('workspace/devices', [\App\Http\Controllers\Workspace\NotificationsController::class, 'device'])->middleware('throttle:30,1');
+    Route::get('support/tickets', [\App\Http\Controllers\Workspace\SupportController::class, 'apiIndex']);
+    Route::post('support/tickets', [\App\Http\Controllers\Workspace\SupportController::class, 'apiStore'])->middleware('throttle:10,1');
+    Route::get('support/tickets/{id}', [\App\Http\Controllers\Workspace\SupportController::class, 'apiShow'])->whereNumber('id');
+    Route::post('support/tickets/{id}/replies', [\App\Http\Controllers\Workspace\SupportController::class, 'apiReply'])->whereNumber('id')->middleware('throttle:30,1');
 });

@@ -17,6 +17,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('workspace:heartbeat')->everyMinute();
         $schedule->command('workspace:deliver')->everyMinute()->withoutOverlapping();
+        $schedule->command('workspace:prune-exports')->hourly()->withoutOverlapping();
     }
 
     /**

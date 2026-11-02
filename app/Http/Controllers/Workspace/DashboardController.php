@@ -70,14 +70,23 @@ class DashboardController extends Controller
         if ($page === 'schedule') { $items = $this->dashboard->appointments($request->user(), $context)->paginate(20)->withQueryString(); }
         if (in_array($page, ['events', 'notices'])) { $items = $this->dashboard->posts($context, $page === 'events' ? 'event' : 'notice')->paginate(20)->withQueryString(); }
         $members = $guardians = collect();
+        $overview = [];
+        if ($page === 'home' && in_array($context['role'], \App\Services\WorkspaceAnalytics::ADMIN_ROLES, true)) {
+            $analytics = app(\App\Services\WorkspaceAnalytics::class);
+            [$from, $to, $grain] = $analytics->window(now()->subMonths(5)->startOfMonth()->toDateString(), null, 'month');
+            $overview = ['attention' => $analytics->attention($context, $request->user()), 'signups' => $analytics->recentSignups($context),
+                'chart' => $analytics->series($context, $from, $to, $grain), 'upcoming' => DB::table('workspace_appointments')->whereIn('school_id', array_keys($context['schools']))->where('starts_at', '>=', now())->whereIn('status', ['pending', 'accepted'])->count(),
+                'video' => $analytics->totals($context, now()->startOfMonth()->toImmutable(), now()->endOfDay()->toImmutable())];
+        }
         if ($page === 'people') {
+            $request->validate(['role' => 'nullable|in:parent,teacher,staff,school_admin,district_admin']);
             $members = DB::table('workspace_memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')
-                ->whereIn('m.school_id', array_keys($context['schools']))->whereNull('u.deleted_at')
+                ->whereIn('m.school_id', array_keys($context['schools']))->whereNull('u.deleted_at')->when($request->role, fn ($q) => $q->where('m.role', $request->role))
                 ->select('m.*', 'u.first_name', 'u.last_name', 'u.email')->orderByDesc('m.id')->paginate(20)->withQueryString();
             $guardians = DB::table('workspace_guardians as g')->join('users as u', 'u.id', '=', 'g.guardian_id')
                 ->whereIn('g.school_id', array_keys($context['schools']))->select('g.*', 'u.first_name', 'u.last_name')->orderByDesc('g.id')->limit(50)->get();
         }
-        return view('workspace.index', $data + ['timezone' => $timezone, 'formatTime' => fn($date, $format = 'j M Y · H:i') => \Carbon\Carbon::parse($date, 'UTC')->timezone($timezone)->format($format), 'page' => $page, 'items' => $items, 'members' => $members, 'guardians' => $guardians,
+        return view('workspace.index', $data + ['timezone' => $timezone, 'formatTime' => fn($date, $format = 'j M Y · H:i') => \Carbon\Carbon::parse($date, 'UTC')->timezone($timezone)->format($format), 'page' => $page, 'items' => $items, 'members' => $members, 'overview' => $overview, 'guardians' => $guardians,
             'contexts' => $this->access->webContexts($request->user()), 'access' => $this->access,
             'classTeachers' => $page === 'classes' ? DB::table('workspace_memberships as m')->join('users as u','u.id','=','m.user_id')->whereIn('m.school_id',array_keys($context['schools']))->where('m.role','teacher')->where('m.status','active')->where('u.status',1)->whereNull('u.deleted_at')->whereNotNull('u.email_verified_at')->where(function ($q) { $q->whereNull('m.starts_at')->orWhere('m.starts_at','<=',now()); })->where(function ($q) { $q->whereNull('m.ends_at')->orWhere('m.ends_at','>',now()); })->select('u.id','u.first_name','u.last_name','m.school_id')->get() : collect(),
             'updateStudents' => $page === 'updates' ? $this->access->students($request->user(), $context)->when($request->student_id, function ($q) use ($request) { $q->where('students.id', $request->student_id); })->with('user:id,first_name,last_name')->limit(200)->get() : collect(),

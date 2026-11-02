@@ -175,3 +175,25 @@ Only two source files differed from the already-deployed four-panel build: `app/
 Before the change, a timestamped backup was written to `/root/ptm-deploy-backups/20261024T184828Z-ddf0618-manual`: the `ptm` database dump, the environment and Compose files, the candidate source tarball, and the rollback image id `sha256:0744aa8c…`. The candidate image was rebuilt with `WITH_GRPC=0` (new id `sha256:8be7b83c…`) and the containers recreated with `up -d`; the app, worker and scheduler report healthy.
 
 Post-deploy checks: public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; Super Admin and Sub-Super Admin review logins are accepted and routed to the MFA step. The other Caddy-fronted services (Postiz on `socialfeed.focusquota.com`) were untouched and still respond. The `workspace:readiness --production` gates that remain false are the documented temporary-review states from §8 (HTTP instead of HTTPS, non-secure session cookies, disabled email/push, and unaccepted Agora/Stripe/PayPal providers and their modules); they are intentional and not deployment failures.
+
+## 12. Backend pull and redeploy — 30 October 2026
+
+Pulled `origin/main` to commit `f6d8734` and redeployed the active `/root/ptm-candidate` stack on loopback port 8091. That directory is not a git checkout, so the 16 changed application files were copied with rsync. The server-specific `docker-compose.prod.yml` and environment files were not changed.
+
+Before the change, a backup was written to `/root/ptm-deploy-backups/20261030T180437Z-f6d8734-manual`: the `ptm` database dump, the environment and Compose files, the source tarball, and the rollback image id `sha256:8be7b83c…` (also tagged `ptm-backend:before-f6d8734`). The image was rebuilt with `WITH_GRPC=0` (new id `sha256:646baa6b…`) and the containers recreated with `up -d`.
+
+Two data migrations ran. `grant_pending_role_requests` changed nothing, because the server had no pending role requests. `fix_student_guardian_slots` moved two children with the relationship "Father" from `mother_id` to `father_id`. Neither migration has a working `down()`, so reverting the data needs the backup.
+
+`ROLE_REQUIRE_APPROVAL` is not set on the server, so the code default (false) applies: Staff, School Admin and District Admin role requests are now active immediately, as Docs 12 and 13 specify. To restore approval, set `ROLE_REQUIRE_APPROVAL=true` in `.env.production` and run `up -d`.
+
+Post-deploy checks: app, worker and scheduler report healthy; `workspace:health` is healthy; public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; today's Laravel log has no errors in its last 200 lines; Postiz still responds. No role login was tested, and the automated tests were not run because the development machine has no PHP.
+
+## 13. Standardized admin dashboards — 2 November 2026
+
+Deployed the standardized dashboards for the four administrative panels to the active `/root/ptm-candidate` stack (loopback port 8091). This covers the shared admin sidebar, the six KPI cards, the Video Communication Center, charts, Attention needed, Recent sign ups, and the new Analytics & Insights, Reports & Exports, Video Calls, Audit / Activity Log and Subscriptions & Billing pages. The code is `origin/main` at `b23fdd5` plus the uncommitted dashboard work. The server copies of the 11 modified files matched `b23fdd5` byte for byte before they were replaced. All 23 files were copied with rsync. The server-specific `docker-compose.prod.yml` and environment files were not changed, and there are no migrations.
+
+Before the change, a backup was written to `/root/ptm-deploy-backups/20261102T184915Z-admin-dashboards`: the `ptm` database dump, the environment and Compose files, the source tarball, and the rollback image id `sha256:2c4dc2d6c670…` (also tagged `ptm-backend:before-admin-dashboards`). The image was rebuilt with `WITH_GRPC=0` (new id `sha256:2c3297dce6f2…`) and the containers recreated with `up -d`.
+
+Post-deploy checks: app, worker and scheduler report healthy; `workspace:health` is healthy; the five new `/dashboard/*` routes are registered; public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; Postiz still responds. Locally, 97 tests passed against the combined code. The hosted review-account passwords recorded in `/root/ptm-deploy-backups` no longer match (the accounts were updated on 25 and 28 October), so no signed-in hosted check was possible.
+
+Delegated Sub-Super Admins see Analytics & Insights only after a Super Admin grants the new `analytics.view` permission.

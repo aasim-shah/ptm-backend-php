@@ -13,8 +13,8 @@
 @endif
 @if($page === 'home')
     <div class="ws-stats">@foreach($summary as $stat)
-        @php $statIcon = str_contains(strtolower($stat['label']), 'student') ? 'graduation-cap' : (str_contains($stat['label'], 'messages') ? 'comments' : (str_contains($stat['label'], 'meetings') ? 'calendar' : (str_contains($stat['label'], 'Schools') ? 'university' : 'bullhorn'))); @endphp
-        <div class="ws-stat"><span class="ws-stat-icon" aria-hidden="true"><i class="fa fa-{{ $statIcon }}"></i></span><div class="ws-stat-content"><p>{{ $stat['label'] }}</p><strong data-summary-index="{{ $loop->index }}">{{ number_format($stat['value']) }}</strong><span>{{ $context['role'] === 'parent' ? 'Your connected school context' : 'Current workspace' }}</span></div></div>
+        @php $statIcon = $stat['icon'] ?? null; if (!$statIcon) $statIcon = str_contains(strtolower($stat['label']), 'student') ? 'graduation-cap' : (str_contains($stat['label'], 'messages') ? 'comments' : (str_contains($stat['label'], 'meetings') ? 'calendar' : (str_contains($stat['label'], 'Schools') ? 'university' : 'bullhorn'))); @endphp
+        <div class="ws-stat"><span class="ws-stat-icon" aria-hidden="true"><i class="fa fa-{{ $statIcon }}"></i></span><div class="ws-stat-content"><p>{{ $stat['label'] }}</p><strong data-summary-index="{{ $loop->index }}">{{ number_format($stat['value']) }}</strong><span>{{ $context['role'] === 'parent' ? 'Your connected school context' : ($overview ? 'Total in this workspace' : 'Current workspace') }}</span></div></div>
     @endforeach</div>
     <p class="ws-meta" id="dashboard-freshness">Updated {{ $as_of }} · refreshes every 30 seconds</p>
     <script>
@@ -29,6 +29,9 @@
         } catch (_) {}
     }, 30000);
     </script>
+    @if($overview)
+    @include('workspace.admin-home')
+    @else
     <div class="ws-grid">
         <div>
             @include('workspace.roles.'.$context['role'])
@@ -42,6 +45,7 @@
             <section class="ws-card"><div class="ws-card-heading"><h2>Coming up</h2><a href="{{ $url('events') }}">Events →</a></div>@forelse($events as $event)<article class="ws-row"><div><strong>{{ $event->title }}</strong><p>{{ $formatTime($event->starts_at, 'j M · H:i') }} {{ $timezone }}</p></div></article>@empty<p class="ws-empty-line">No upcoming school events.</p>@endforelse</section>
         </div>
     </div>
+    @endif
 @elseif($page === 'classes')
     @if($access->can($context, 'academics.manage'))<section class="ws-card">@include('workspace.form-heading', ['icon'=>'book','tone'=>'purple','title'=>'Create or update a class section','description'=>'Organize your classes and connect an approved class teacher.'])<p class="ws-field-hint">Use the same class and section names to update their teacher.</p><form method="post" action="{{ route('workspace.classes') }}" class="ws-form ws-form-grid">@include('workspace.fields')<label>Class / academic level<input name="name" required maxlength="120" value="{{ old('name') }}" placeholder="Year 4"></label><label>Section<input name="section_name" required maxlength="120" value="{{ old('section_name') }}" placeholder="Maple"></label><label>Class teacher<select name="teacher_id" required><option value="">Choose an approved teacher</option>@foreach($classTeachers as $teacher)<option value="{{ $teacher->id }}">{{ $teacher->first_name }} {{ $teacher->last_name }} · {{ $context['schools'][$teacher->school_id] }}</option>@endforeach</select></label><div class="ws-form-actions"><button class="ws-btn" type="submit">Save class section <span aria-hidden="true">→</span></button></div></form></section>@endif
     <section class="ws-card"><h2>Class sections</h2><div class="ws-table-wrap"><table><thead><tr><th>School</th><th>Class</th><th>Section</th><th>Students</th></tr></thead><tbody>@forelse($items as $section)<tr><td>{{ $context['schools'][$section->class->school_id] }}</td><td>{{ $section->class->name }}</td><td>{{ $section->section?->name }}</td><td>{{ $section->students_count }}</td></tr>@empty<tr><td colspan="4">No assigned class sections in this context.</td></tr>@endforelse</tbody></table></div>{{ $items->links('pagination::simple-bootstrap-4') }}</section>
