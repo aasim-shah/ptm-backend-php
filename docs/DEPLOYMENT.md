@@ -175,3 +175,16 @@ Only two source files differed from the already-deployed four-panel build: `app/
 Before the change, a timestamped backup was written to `/root/ptm-deploy-backups/20261024T184828Z-ddf0618-manual`: the `ptm` database dump, the environment and Compose files, the candidate source tarball, and the rollback image id `sha256:0744aa8c…`. The candidate image was rebuilt with `WITH_GRPC=0` (new id `sha256:8be7b83c…`) and the containers recreated with `up -d`; the app, worker and scheduler report healthy.
 
 Post-deploy checks: public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; Super Admin and Sub-Super Admin review logins are accepted and routed to the MFA step. The other Caddy-fronted services (Postiz on `socialfeed.focusquota.com`) were untouched and still respond. The `workspace:readiness --production` gates that remain false are the documented temporary-review states from §8 (HTTP instead of HTTPS, non-secure session cookies, disabled email/push, and unaccepted Agora/Stripe/PayPal providers and their modules); they are intentional and not deployment failures.
+
+## 12. Chat on Reverb and QA fixes — 8 November 2026
+
+The live tree in `/root/ptm-candidate` had code that was never pushed (admin workspace work up to `757d3de`, the temporary subscription bypass and the support ticket routes). It was imported as a "snapshot of live" commit and these changes were built on top of it, so deploying them did not remove anything. Only the changed files were copied.
+
+- Chat history now lives in MySQL (`chat_messages`); files are on the public disk under `chat/{chat_id}/`. Realtime goes over Laravel Reverb.
+- New service `reverb` in `docker-compose.prod.yml` (same image, `php artisan reverb:start`). It listens on 8080 inside the Docker network; on the host it is bound to `127.0.0.1:8081` because `temporal-ui` already uses host port 8080.
+- New `.env.production` keys: `BROADCAST_DRIVER=reverb`, `BROADCAST_CONNECTION=reverb`, `REVERB_APP_ID=ptm`, `REVERB_APP_KEY=ptm-live-key` (hard-coded in the app), `REVERB_APP_SECRET` (random, server only), `REVERB_HOST=reverb`, `REVERB_PORT=8080`, `REVERB_SCHEME=http`, `REVERB_SERVER_HOST=0.0.0.0`, `REVERB_SERVER_PORT=8080`.
+- Caddy (`/etc/caddy/Caddyfile`, previous copy `Caddyfile.bak-2026-11-08`): `/app/*` goes to Reverb on `127.0.0.1:8081`; `/apps/*` (the publish API) is not exposed. The app upstream retries for up to 25 s (`lb_try_duration`) and keeps idle upstream connections for 3 s, below Apache's 5 s `KeepAliveTimeout`.
+- The intermittent 502s in the QA run (09:50 and 09:52 UTC) were Caddy finding no upstream while the app container was being recreated by a deploy. A restart takes about 15 s; with the retry window, 69 probe requests during this deploy's restart all returned 200 (the slowest waited 15 s).
+- Backup: `/root/ptm-deploy-backups/20261108T111103Z-qa-chat-reverb` (database, environment and Compose files, Caddyfile, source, rollback image `sha256:e1e73c20…`).
+
+Rollback: restore the Caddyfile backup and reload Caddy, put back the backed-up `.env.production` and `docker-compose.prod.yml`, `docker tag <rollback image> ptm-backend:candidate`, then `up -d` and `docker rm -f ptm-candidate-reverb-1`. The `chat_messages` table can stay; the old code does not use it.
