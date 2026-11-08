@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\Api\v2;
 
+use App\Events\MessageSent;
+use App\Events\MessagesRead;
 use App\Helpers\Utility;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ChatMessageResource;
 use App\Models\Chat;
+use App\Models\ChatMessage;
 use App\Models\Schools;
 use App\Models\User;
 use App\Models\UserSchools;
@@ -13,15 +17,18 @@ use App\Services\PushNotificationSender;
 use App\Services\RoleContextService;
 use App\Support\Access;
 use Carbon\Carbon;
-use Google\Cloud\Firestore\FirestoreClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Kreait\Firebase\Factory;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class ChatController extends Controller
 {
+    public const FILE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xlsx', 'ppt', 'pptx', 'txt'];
+
     private NotificationSender $notificationSender;
 
     public function __construct(NotificationSender $notificationSender)
@@ -201,12 +208,27 @@ class ChatController extends Controller
         return response()->json($response);
     }
 
+    /**
+     * POST chat/send: stores the message (and file) in MySQL, updates the chat summary row
+     * used by the chat lists, then pushes it to both participants over Reverb.
+     */
     public function createChat(Request $request){
-        if(!$request->to_user_id){
-            return response()->json([
-                'status' => 400,
-                'message' => trans('error_occurred')
-            ], 400);
+        $file = $request->file('file');
+        $file_extension = $file
+            ? strtolower(ltrim((string) ($request->file_extension ?: $file->getClientOriginalExtension()), '.'))
+            : null;
+        $validator = Validator::make($request->all() + ['extension' => $file_extension], [
+            'to_user_id' => 'required|integer',
+            'message' => 'nullable|string|required_without:file',
+            'file' => 'nullable|file|max:10240',
+            'extension' => 'nullable|in:' . implode(',', self::FILE_EXTENSIONS),
+        ], [
+            'message.required_without' => 'A message or a file is required.',
+            'file.max' => 'The file may not be larger than 10 MB.',
+            'extension.in' => 'This file type is not allowed. Allowed: ' . implode(', ', self::FILE_EXTENSIONS) . '.',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 422);
         }
 
         $user = Auth::user();
@@ -224,66 +246,123 @@ class ChatController extends Controller
         if (!$this->mayMessage($user, $receiver)) {
             return Access::forbidden();
         }
-        $file_name = null;
-        $file = $request->file;
-        $destinationPath = null;
-        $file_extension = null;
-        if($file){
-            $file_extension = $request->file_extension;
-            $file_name = Utility::getUUID() . "." . $file_extension;
-            $destinationPath = storage_path('app/public/chat/files');
-            $file->move($destinationPath, $file_name);
-        }
 
-        $chatExists = Chat::where(function ($query) use ($user,$receiver){
-            $query->where('user_id',$user->id);
-            $query->where('to_user_id',$receiver->id);
-        })->orWhere(function ($query) use ($user,$receiver){
-            $query->where('user_id',$receiver->id);
-            $query->where('to_user_id',$user->id);
-        })->first();
+        $storedPath = null;
+        try {
+            DB::beginTransaction();
+            $chatExists = Chat::where(function ($query) use ($user,$receiver){
+                $query->where('user_id',$user->id);
+                $query->where('to_user_id',$receiver->id);
+            })->orWhere(function ($query) use ($user,$receiver){
+                $query->where('user_id',$receiver->id);
+                $query->where('to_user_id',$user->id);
+            })->lockForUpdate()->first();
+            $chatId = $chatExists ? $chatExists->id : Utility::getUUID();
 
-        $is_image = false;
-        $ext = explode('.',$file_name);
-        if(sizeof($ext) > 1 && in_array($ext[1],['png','jpg','jpeg','svg','webp','mp4','gif'])){
-            $is_image = true;
-        }
+            $is_image = false;
+            if ($file) {
+                $storedPath = $file->storeAs("chat/{$chatId}", Str::uuid() . '.' . $file_extension, 'public');
+                $is_image = in_array($file_extension, ChatMessage::IMAGE_EXTENSIONS, true);
+            }
+            $fileUrl = $storedPath ? url(Storage::disk('public')->url($storedPath)) : null;
 
-        $chatJson =
-            [
-                'message' => $request->message,
+            $chatJson =
+                [
+                    'message' => $request->message,
+                    'sender_id' => $user->id,
+                    'file' => $fileUrl,
+                    'file_extension' => $file_extension,
+                    'is_image' => $is_image,
+                    'sender_name' => $user->first_name,
+                    'receiver_name' => $receiver->first_name,
+                    'created_at' => Carbon::now()
+                ];
+
+            if(!$chatExists){
+                $chat = new Chat();
+                $chat->id = $chatId;
+                $chat->user_id = $user->id;
+                $chat->to_user_id = $to_user_id;
+                $chat->new_message = true;
+                $chat->message = json_encode($chatJson,true);
+                $chat->save();
+            }else{
+                if(($chatExists->message['sender_id'] ?? null) == $user->id){
+                    $chatExists->new_message_count = $chatExists->new_message_count+1;
+                }else{
+                    $chatExists->new_message_count = 1;
+                }
+                $chatExists->new_message = true;
+                $chatExists->message = $chatJson;
+                $chatExists->updated_at = Carbon::now();
+                $chatExists->save();
+            }
+
+            $chatMessage = ChatMessage::create([
+                'chat_id' => $chatId,
                 'sender_id' => $user->id,
-                'file' => $file_name,
+                'receiver_id' => $receiver->id,
+                'message' => $request->message,
+                'file_path' => $storedPath,
                 'file_extension' => $file_extension,
                 'is_image' => $is_image,
-                'sender_name' => $user->first_name,
-                'receiver_name' => $receiver->first_name,
-                'created_at' => Carbon::now()
-            ];
-
-        $chatId = Utility::getUUID();
-        if(!$chatExists){
-            $chat = new Chat();
-            $chat->id = $chatId;
-            $chat->user_id = $user->id;
-            $chat->to_user_id = $to_user_id;
-            $chat->new_message = true;
-            $chat->message = json_encode($chatJson,true);
-            $chat->save();
-        }else{
-            $chatId = $chatExists->id;
-            if($chatExists->message['sender_id'] == $user->id){
-                $chatExists->new_message_count = $chatExists->new_message_count+1;
-            }else{
-                $chatExists->new_message_count = 1;
+            ]);
+            DB::commit();
+        } catch (\Throwable $exception) {
+            DB::rollBack();
+            if ($storedPath) {
+                Storage::disk('public')->delete($storedPath);
             }
-            $chatExists->new_message = true;
-            $chatExists->message = $chatJson;
-            $chatExists->save();
+            Log::error($exception);
+            return response()->json(['status' => 500, 'message' => trans('error_occurred')], 500);
+        }
+
+        // Realtime is best effort: when Reverb is down the app falls back to polling the history.
+        try {
+            broadcast(new MessageSent($chatMessage));
+        } catch (\Throwable $exception) {
+            Log::warning('Chat broadcast failed', ['chat_id' => $chatId, 'error' => $exception->getMessage()]);
         }
         $this->brodCastMessage($user,$request->message,$to_user_id,$chatJson);
-        $this->sendMessage($request,$destinationPath,$file_name,$chatId,$chatJson);
-        return response()->json($chatJson);
+
+        return response()->json($chatJson + [
+            'chat_id' => $chatId,
+            'chat_message' => (new ChatMessageResource($chatMessage))->resolve(),
+        ]);
+    }
+
+    /**
+     * GET chat/{chat_id}/messages?limit=50&before_id=: one page of history, oldest first.
+     * Without before_id it is the newest page; has_more says whether older messages exist.
+     */
+    public function messages(Request $request, $chatId)
+    {
+        $user = Auth::user();
+        $chat = Chat::where('id', $chatId)->first();
+        if (!$chat) {
+            return response()->json(['message' => 'Chat not found.'], 404);
+        }
+        if (!in_array((int) $user->id, [(int) $chat->user_id, (int) $chat->to_user_id], true)) {
+            return Access::forbidden();
+        }
+
+        $limit = (int) $request->query('limit', 50);
+        $limit = $limit < 1 ? 50 : min($limit, 100);
+        $beforeId = $request->query('before_id');
+
+        $page = ChatMessage::where('chat_id', $chat->id)
+            ->when(is_numeric($beforeId), function ($query) use ($beforeId) {
+                $query->where('id', '<', (int) $beforeId);
+            })
+            ->orderByDesc('id')
+            ->limit($limit + 1)
+            ->get();
+        $hasMore = $page->count() > $limit;
+
+        return response()->json([
+            'data' => ChatMessageResource::collection($page->take($limit)->reverse()->values())->resolve(),
+            'has_more' => $hasMore,
+        ]);
     }
 
     public function chatRead(Request $request){
@@ -303,9 +382,22 @@ class ChatController extends Controller
             ], 400);
         }
 
-        if($isChat->message['sender_id'] != $user->id){
+        if(($isChat->message['sender_id'] ?? null) != $user->id){
             $isChat->new_message_count = 0;
             $isChat->save();
+        }
+
+        $read = ChatMessage::where('chat_id', $isChat->id)
+            ->where('receiver_id', $user->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => Carbon::now()]);
+        if ($read > 0) {
+            $otherUserId = (int) $isChat->user_id === (int) $user->id ? (int) $isChat->to_user_id : (int) $isChat->user_id;
+            try {
+                broadcast(new MessagesRead($isChat->id, (int) $user->id, $otherUserId));
+            } catch (\Throwable $exception) {
+                Log::warning('Chat read broadcast failed', ['chat_id' => $isChat->id, 'error' => $exception->getMessage()]);
+            }
         }
         return response()->json($isChat->refresh());
 
@@ -379,74 +471,23 @@ class ChatController extends Controller
 
         $message =  $message ?? "New File";
         $senderName = $user->first_name.' '.$user->last_name;
-        $optionBuilder = new OptionsBuilder();
-        $optionBuilder->setTimeToLive(60*20);
-        $notificationBuilder = new PayloadNotificationBuilder('New Message From : '.$senderName);
-        $notificationBuilder->setBody($message?? 'New File')
-            ->setSound('default')
-            ->setClickAction(config('environment.APP_SITE'));
-        $dataBuilder = new PayloadDataBuilder();
-        $dataBuilder->addData(
-            [
-                'sender_name' => $senderName,
-                'message' => $message,
-                'body' => $chatJson
-            ]);
+        $data = [
+            'sender_name' => $senderName,
+            'message' => $message,
+            'body' => $chatJson
+        ];
 
-        $tokenUser = User::where('id',$to_user_id)->where('enable_notification',1)->first();
+        // A push failure must never fail the chat send.
+        try {
+            $tokenUser = User::where('id',$to_user_id)->where('enable_notification',1)->first();
 
-        if($tokenUser){
-            $topic = new Topics();
-            $topic->topic($tokenUser->fcm_id)->andTopic(function($condition) use ($tokenUser){
-                $condition->topic($tokenUser->fcm_id)->orTopic('cultural');
-            });
-            $data = $dataBuilder->build();
-            PushNotificationSender::sendMobileMessage('New Message From : '.$senderName, $message, $tokenUser->fcm_id, "CHAT", $data);
-            $this->notificationSender->saveLogs($to_user_id,$user->id,$message,'CHAT','New Message From : '.$senderName);
+            if($tokenUser){
+                PushNotificationSender::sendMobileMessage('New Message From : '.$senderName, $message, $tokenUser->fcm_id, "CHAT", $data);
+                $this->notificationSender->saveLogs($to_user_id,$user->id,$message,'CHAT','New Message From : '.$senderName);
 
-        }
-
-    }
-
-    public function sendMessage($request,$destinationPath,$fileName,$chatId,$chatJson)
-    {
-        $message = $request->input('message')?? 'New File';
-        $to_user_id = $request->to_user_id;
-
-        $storage = (new Factory)
-            ->withServiceAccount(config('services.firebase.key_file'))
-            ->withDatabaseUri(config('environment.FIREBASE_DB_URL'))
-            ->createStorage();
-
-        $firebaseFilePathName = null;
-        if($destinationPath){
-            $firebase_storage_path = 'Chat/'.$chatId.'/';
-            $filePath = $destinationPath.'/'.$fileName;
-            $firebaseFilePathName = $firebase_storage_path . $fileName;
-            $object = $storage->getBucket()->upload(fopen($filePath,'r'),
-                ['name' => $firebaseFilePathName]);
-            $expiration = new \DateTime('2035-11-01T00:00:00.000Z');
-            $firebaseFilePathName = $object->signedUrl($expiration);
-        }
-
-        $chatJson['file'] = $firebaseFilePathName;
-
-        try{
-
-            $firestore = new FirestoreClient([
-                'projectId' => config('environment.FIREBASE_PROJECT_ID'),
-                'keyFilePath' => config('services.firebase.key_file'),
-            ]);
-            $userRef = $firestore->collection('messages')->document($chatId);
-            $chatMessagesCollectionRef = $userRef->collection('chatMessages');
-            $newMessageRef = $chatMessagesCollectionRef->add([
-                'text' => $message,
-                'data' => $chatJson,
-                'to_user_id' =>$to_user_id,
-                'user' => auth()->user()->first_name,
-            ]);
-        }catch (\Exception $e){
-            Log::error($e);
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Chat push notification failed', ['to_user_id' => $to_user_id, 'error' => $exception->getMessage()]);
         }
 
     }

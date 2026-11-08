@@ -43,7 +43,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $user = $request->user();
@@ -141,7 +141,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
             $otp= Utility::getOtp();
             $gender = strtolower(trim((string) $request->input('gender'))) ?: null;
@@ -228,10 +228,10 @@ class AuthController extends Controller
         $subscription->user_id = $user_id;
         $subscription->email = $email;
         $subscription->type = Plan::TRAIL;
-        $subscription->remaining_time = config('environment.TRAIL')*60;
-        $subscription->call_count = config('environment.TRAIL_CALL_COUNT');
+        $subscription->remaining_time = app(\App\Services\PlatformSettings::class)->get('trial.minutes')*60;
+        $subscription->call_count = app(\App\Services\PlatformSettings::class)->get('trial.call_count');
         $subscription->activated_date = Carbon::now()->toDateString();
-        $subscription->expire_date = Carbon::now()->addDays((int) (config('environment.TRAIL_DAYS') ?? 5))->toDateString();
+        $subscription->expire_date = Carbon::now()->addDays((int) app(\App\Services\PlatformSettings::class)->get('trial.days'))->toDateString();
         $subscription->status = 'ACTIVE';
         $subscription->save();
     }
@@ -271,7 +271,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
 
@@ -346,7 +346,7 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 400,
                 'message' => $errorMessage,
-            ], 401);
+            ], 422);
         }
         // Parents and teachers join a school here. Staff and admins ask for access through
         // POST /auth/role-requests instead.
@@ -447,7 +447,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
             $image = $request->file('image');
             $file_path = null;
@@ -627,14 +627,18 @@ class AuthController extends Controller
         }
     }
 
-    public function settings(){
+    public function settings(\Illuminate\Http\Request $request){
         return response()->json([
             'status' => 200,
             'message' => 'Settings',
             'data' => [
-                'trial_period' => config('environment.TRAIL_DAYS'),
-                'trial_time' => config('environment.TRAIL') * 60,
-                'trial_text' => config('environment.TRAIL_DAYS')." Days Only",
+                'trial_period' => app(\App\Services\PlatformSettings::class)->get('trial.days'),
+                'trial_time' => app(\App\Services\PlatformSettings::class)->get('trial.minutes') * 60,
+                'trial_text' => app(\App\Services\PlatformSettings::class)->get('trial.days')." Days Only",
+                // AdMob kill switch and per-market switches set by the Super Admin.
+                'ads_enabled' => app(\App\Services\PlatformSettings::class)->adsEnabledFor($request->user(), $request->query('market')),
+                'terms_version' => app(\App\Services\PlatformSettings::class)->get('policy.terms_version'),
+                'privacy_version' => app(\App\Services\PlatformSettings::class)->get('policy.privacy_version'),
                 'premium_price' => config('environment.PREMIUM_PRICE'),
                 'premium_time' => config('environment.PREMIUM') * 60
             ],

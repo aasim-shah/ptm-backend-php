@@ -50,7 +50,7 @@ class TeacherController extends Controller
             $response = array(
                 'message' => trans('no_permission_message')
             );
-            return response()->json($response, 401);
+            return response()->json($response, 403);
         }
         $class_id = $request->class_id;
         $student_id = $request->student_id;
@@ -105,7 +105,7 @@ class TeacherController extends Controller
             $response = array(
                 'message' => trans('no_permission_message')
             );
-            return response()->json($response, 401);
+            return response()->json($response, 403);
         }
         $class_id = $request->class_id;
         $quarter_id = $request->quarter_id;
@@ -181,7 +181,7 @@ class TeacherController extends Controller
             $response = array(
                 'message' => trans('no_permission_message')
             );
-            return response()->json($response, 401);
+            return response()->json($response, 403);
         }
         $class_id = $request->class_id;
         $subject_id = $request->subject_id;
@@ -199,6 +199,7 @@ class TeacherController extends Controller
                 })
                 ->with('user.student.father')
                 ->with('user.student.mother')
+                ->with('user.student.guardian')
                 ->groupBy('quarter_id','student_id','subject_id','session_year')->paginate(10);
         }else {
             $stuAllRepoCardsClassWise = StudentReportCards::where('class_id', $class_id)
@@ -207,7 +208,11 @@ class TeacherController extends Controller
                 ->where('session_year_id',$session_year_id)
                 ->with('user.student.father')
                 ->with('user.student.mother')
+                ->with('user.student.guardian')
                 ->groupBy('quarter_id', 'student_id', 'subject_id', 'session_year')->paginate(10);
+        }
+        foreach ($stuAllRepoCardsClassWise as $reportCard) {
+            $reportCard->user?->setAttribute('primary_parent', $reportCard->user->student?->primaryParentSummary());
         }
 
         $response = array(
@@ -229,7 +234,7 @@ class TeacherController extends Controller
             $response = array(
                 'message' => trans('no_permission_message')
             );
-            return response()->json($response, 401);
+            return response()->json($response, 403);
         }
         $validator = Validator::make($request->all(), [
             'class_id' => 'required',
@@ -286,7 +291,7 @@ class TeacherController extends Controller
             $response = array(
                 'message' => trans('no_permission_message')
             );
-            return response()->json($response, 401);
+            return response()->json($response, 403);
         }
         // dd($request->all());
         $validator = Validator::make($request->all(), [

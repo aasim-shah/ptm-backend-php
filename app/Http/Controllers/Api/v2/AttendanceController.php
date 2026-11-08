@@ -314,21 +314,22 @@ class AttendanceController extends Controller
             return response()->json($response);
         }
 
+        // No subject (missing, "null" or empty) means no subject filter (QA-27).
         $attendance = Attendance::where('date', $date)
             ->where('class_section_id', $classSection->id)
-            ->where('subject_id', $subject_id)
+            ->when($subject_id, fn ($query) => $query->where('subject_id', $subject_id))
             ->with('student')->get();
 
         $absentCount = Attendance::where('date', $date)
             ->where('class_section_id', $classSection->id)
             ->where('type', false)
-            ->where('subject_id', $subject_id)
+            ->when($subject_id, fn ($query) => $query->where('subject_id', $subject_id))
             ->with('student')->count();
 
         $presentCount = Attendance::where('date', $date)
             ->where('class_section_id', $classSection->id)
             ->where('type', true)
-            ->where('subject_id', $subject_id)
+            ->when($subject_id, fn ($query) => $query->where('subject_id', $subject_id))
             ->with('student')->count();
 
         $response = array(

@@ -41,7 +41,7 @@ class EnforceAccountSecurity
             } else { DB::table('account_sessions')->where('id', $session->id)->update(['last_seen_at' => now()]); }
         }
         if ($request->routeIs('security.index', 'security.begin', 'security.confirm', 'security.challenge', 'security.skip') || $request->is('api/security/mfa/challenge')) { return $next($request); }
-        $reviewSkip = !$api && !$state?->enabled_at && config('security.allow_review_skip') && $request->hasSession()
+        $reviewSkip = !$api && !$state?->enabled_at && config('security.allow_review_skip') && !config('security.require_admin_mfa') && $request->hasSession()
             && $request->session()->get('review_skip_user') === $user->id
             && $request->session()->get('review_skip_at', 0) > now()->subMinutes(config('security.mfa_lifetime_minutes'))->timestamp;
         if ($security->required($user) && !$reviewSkip) {

@@ -35,9 +35,11 @@ use App\Models\UserSubscription;
 use App\Services\NotificationSender;
 use Carbon\Carbon;
 use App\Support\Access;
+use App\Support\MeetingTime;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -75,7 +77,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $user = $request->user();
@@ -112,7 +114,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $user = $request->user();
@@ -152,7 +154,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $user = $request->user();
@@ -190,7 +192,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
             $user = $request->user();
             if ($user->pincode == $request['pincode']) {
@@ -279,7 +281,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $pincode = Utility::getOtp();
@@ -348,7 +350,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $user = $request->user();
@@ -572,7 +574,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $user = $request->user();
@@ -679,12 +681,6 @@ class ApiController extends Controller
         Log::info($request);
         try {
 
-            $meetingTime = str_replace(' ', ' ', $request->meeting_time);
-            $meetingEndTime = str_replace(' ', ' ', $request->meeting_end_time);
-            if(strtotime($meetingTime) >= strtotime($meetingEndTime)){
-                throw new BadRequestException("The meeting time must be a date before meeting end time",400);
-            }
-
             $validateUser = Validator::make($request->all(),
                 [
                     'title' => 'required',
@@ -698,7 +694,23 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
+            }
+            // Validate first: comparing missing times used to throw and return HTTP 500.
+            $meetingTime = str_replace(' ', ' ', $request->meeting_time);
+            $meetingEndTime = str_replace(' ', ' ', $request->meeting_end_time);
+            if(strtotime($meetingTime) >= strtotime($meetingEndTime)){
+                return response()->json([
+                    'status' => 400,
+                    'message' => "The meeting time must be a date before meeting end time",
+                ], 422);
+            }
+            // QA-23: same-day times earlier than now passed after:yesterday.
+            if (MeetingTime::startIsPast($request->meeting_date, $request->meeting_time, $request->user(), $request)) {
+                return response()->json([
+                    'status' => 422,
+                    'message' => MeetingTime::PAST_MESSAGE,
+                ], 422);
             }
 
             $user = $request->user();
@@ -910,25 +922,21 @@ class ApiController extends Controller
         Log::info($request);
 
        $user = $request->user();
+       // TODO(testing): query kept live because $isActive->call_count is used for the participant cap below.
        $isActive = UserSubscription::where('user_id',$user->id)
             ->where('status',"ACTIVE")->where('remaining_time','!=','0')->first();
-       if(!$isActive){
-           $response = [
-               'error' => true,
-               'message' => "No Active Subscription",
-               'data' => UserSubscription::where('user_id',$user->id)
-                   ->where('status',"ACTIVE")->first()
-           ];
-           return response()->json($response,400);
-       }
+       // TODO(testing): subscription check disabled so free users can test meetings/video calls. Restore before release.
+       // if(!$isActive){
+       //     $response = [
+       //         'error' => true,
+       //         'message' => "No Active Subscription",
+       //         'data' => UserSubscription::where('user_id',$user->id)
+       //             ->where('status',"ACTIVE")->first()
+       //     ];
+       //     return response()->json($response,400);
+       // }
 
         try {
-
-            $meetingTime = str_replace(' ', ' ', $request->meeting_time);
-            $meetingEndTime = str_replace(' ', ' ', $request->meeting_end_time);
-            if(strtotime($meetingTime) >= strtotime($meetingEndTime)){
-                throw new BadRequestException("The meeting time must be a date before meeting end time",400);
-            }
 
             $validateUser = Validator::make($request->all(),
                 [
@@ -943,7 +951,23 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
+            }
+            // Validate first: comparing missing times used to throw and return HTTP 500.
+            $meetingTime = str_replace(' ', ' ', $request->meeting_time);
+            $meetingEndTime = str_replace(' ', ' ', $request->meeting_end_time);
+            if(strtotime($meetingTime) >= strtotime($meetingEndTime)){
+                return response()->json([
+                    'status' => 400,
+                    'message' => "The meeting time must be a date before meeting end time",
+                ], 422);
+            }
+            // QA-23: same-day times earlier than now passed after:yesterday.
+            if (MeetingTime::startIsPast($request->meeting_date, $request->meeting_time, $request->user(), $request)) {
+                return response()->json([
+                    'status' => 422,
+                    'message' => MeetingTime::PAST_MESSAGE,
+                ], 422);
             }
 
             // Staff and admin contexts create meetings through the teacher (institution) slot.
@@ -998,7 +1022,9 @@ class ApiController extends Controller
                 $request->teacher_id = $user->id;
             }
 
-            if(in_array($actingRole, UserRole::INSTITUTION_ROLES, true) && $isActive->call_count <= sizeof($student_parent_ids)){
+            // TODO(testing): subscription check disabled so free users can test meetings/video calls. Restore before release.
+            // Original: if(in_array($actingRole, UserRole::INSTITUTION_ROLES, true) && $isActive->call_count <= sizeof($student_parent_ids)){
+            if(in_array($actingRole, UserRole::INSTITUTION_ROLES, true) && $isActive && $isActive->call_count <= sizeof($student_parent_ids)){
                 $response = array(
                     'error' => true,
                     'message' => "Participant count exceeded",
@@ -1217,10 +1243,14 @@ class ApiController extends Controller
             $validateUser = Validator::make($request->all(),
                 [
                     'country_id' => 'required',
-                    'school_name' => 'required',
+                    // QA-07: junk names like "mzmz" were accepted.
+                    'school_name' => ['required', 'string', 'min:3', 'max:191', 'regex:/\p{L}.*\p{L}/u'],
                     'phone' => 'nullable',
                     'email' => 'nullable|email|unique:schools,email',
                     'post_code' => 'required'
+                ], [
+                    'school_name.min' => 'The school name must be at least 3 characters.',
+                    'school_name.regex' => 'The school name must contain letters.',
                 ]);
 
             if ($validateUser->fails()) {
@@ -1228,7 +1258,7 @@ class ApiController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $isSchool = Schools::where('school_name', 'like', '%' . $request->school_name . '%')->first();
@@ -1921,6 +1951,96 @@ class ApiController extends Controller
             'data' => $class
         ], 200);
     }
+    /**
+     * POST teacher/class/update: rename a class, change its grade, or move the teacher's
+     * section. Same checks as create/delete; returns the class in the classes/fetch shape.
+     */
+    public function updateClass(Request $request)
+    {
+        $user = $request->user();
+        if (\App\Support\Access::role($user) != 'teacher') {
+            $response = array(
+                'message' => trans('no_permission_message')
+            );
+            return response()->json($response,400);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'class_id' => 'required|integer',
+            'name' => 'nullable|string|max:191',
+            'grade' => 'nullable|string|max:191',
+            'section_id' => 'nullable|integer',
+        ]);
+        if ($validator->fails()) {
+            $response = array(
+                'error' => true,
+                'message' => $validator->errors()->first(),
+                'code' => 102,
+            );
+            return response()->json($response,422);
+        }
+        if (!Access::teacherOwnsClass($user, $request->class_id)) {
+            return Access::forbidden();
+        }
+        $class = ClassSchool::where('id', $request->class_id)->first();
+        if (!$class) {
+            return response()->json(['error' => true, 'message' => 'Class not found.', 'data' => null], 404);
+        }
+
+        if ($request->filled('section_id')
+            && !Section::where('id', $request->section_id)->where('school_id', $class->school_id)->exists()) {
+            return response()->json([
+                'error' => true,
+                'message' => "Invalid school or section detected.",
+                'data' => [
+                    "school_id" => $class->school_id,
+                    "section_id" => $request->section_id
+                ],
+            ], 400);
+        }
+
+        $name = $request->filled('name') ? $request->name : $class->name;
+        $grade = $request->has('grade') ? $request->grade : $class->grade;
+        $duplicate = ClassSchool::where('name', $name)
+            ->where('school_id', $class->school_id)
+            ->where('grade', $grade)
+            ->where('id', '!=', $class->id)
+            ->exists();
+        if ($duplicate) {
+            return response()->json([
+                'error' => true,
+                'message' => "Failed to update class. Duplicate class detected",
+                'data' => null
+            ], 400);
+        }
+
+        DB::transaction(function () use ($class, $name, $grade, $request, $user) {
+            $class->name = $name;
+            $class->grade = $grade;
+            $class->save();
+            if ($request->filled('section_id')) {
+                ClassSection::where('class_id', $class->id)
+                    ->where('class_teacher_id', $user->id)
+                    ->update(['section_id' => $request->section_id]);
+            }
+        });
+
+        $class = ClassSchool::where('id', $class->id)
+            ->with('allSubjects.subject')
+            ->with(['class_section' => function ($query) {
+                $query->withCount(['students' => function ($query) {
+                    $query->where('class_status', 'ACCEPTED');
+                    $query->whereHas('user');
+                }]);
+            }])->first();
+        return response()->json([
+            'error' => false,
+            'message' => 'Class updated successfully.',
+            'data' => $class,
+            'code' => 200,
+        ]);
+    }
+
     public function deleteClass(Request $request)
     {
         $user = $request->user();

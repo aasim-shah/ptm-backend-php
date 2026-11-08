@@ -14,7 +14,7 @@ class HandleSanctumUnauthenticatedApi
         try {
             return $next($request);
         } catch (AuthenticationException $exception) {
-            return response()->json(['status' => 400, 'error' => 'Unauthenticated.'], 401);
+            return response()->json(['status' => 400, 'error' => 'Unauthenticated.', 'message' => 'Unauthenticated.'], 401);
         }
     }
 }

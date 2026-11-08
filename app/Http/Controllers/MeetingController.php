@@ -402,6 +402,13 @@ class MeetingController extends Controller
                 'message' => $errorMessage,
             ]);
         }
+        if (\App\Support\MeetingTime::startIsPast($request->meeting_date, $request->meeting_time, Auth::user(), $request)) {
+            return response()->json([
+                'error' => true,
+                'status' => 400,
+                'message' => \App\Support\MeetingTime::PAST_MESSAGE,
+            ]);
+        }
 
         $stuIds = $request->student_ids;
         if (sizeof($stuIds) == 1) {
@@ -753,18 +760,19 @@ class MeetingController extends Controller
         $channel_name = $request->channel_name;
         $user_id = Auth::user()->id;
 
-        $isActive = UserSubscription::where('user_id',$user_id)
-            ->where('status',"ACTIVE")->where('remaining_time','!=','0')->first();
-
-        if(!$isActive){
-            $response = [
-                'error' => true,
-                'message' => "No Active Subscription",
-                'data' => UserSubscription::where('user_id',$user_id)
-                    ->where('status',"ACTIVE")->first()
-            ];
-            return response()->json($response,400);
-        }
+        // TODO(testing): subscription check disabled so free users can test meetings/video calls. Restore before release.
+        // $isActive = UserSubscription::where('user_id',$user_id)
+        //     ->where('status',"ACTIVE")->where('remaining_time','!=','0')->first();
+        //
+        // if(!$isActive){
+        //     $response = [
+        //         'error' => true,
+        //         'message' => "No Active Subscription",
+        //         'data' => UserSubscription::where('user_id',$user_id)
+        //             ->where('status',"ACTIVE")->first()
+        //     ];
+        //     return response()->json($response,400);
+        // }
 
 
         $isRoom = UserCallRoom::where('user_id',$user_id)->where('chanel_name',$channel_name)->first();
@@ -819,16 +827,17 @@ class MeetingController extends Controller
     }
 
     public function channelToken(Request $request){
-        $isActive = UserSubscription::where('user_id',Auth::user()->id)
-            ->where('status','ACTIVE')->where('remaining_time','!=','0')->first();
-        if(!$isActive){
-            $response = [
-                'error' => true,
-                'message' => "No Active Subscription",
-                'data' => $isActive,
-            ];
-            return response()->json($response,400);
-        }
+        // TODO(testing): subscription check disabled so free users can test meetings/video calls. Restore before release.
+        // $isActive = UserSubscription::where('user_id',Auth::user()->id)
+        //     ->where('status','ACTIVE')->where('remaining_time','!=','0')->first();
+        // if(!$isActive){
+        //     $response = [
+        //         'error' => true,
+        //         'message' => "No Active Subscription",
+        //         'data' => $isActive,
+        //     ];
+        //     return response()->json($response,400);
+        // }
 
         $channelName = $request->channel_name;
         $appID = config('environment.AGORA_APP_ID');

@@ -4,7 +4,7 @@
 <header class="ws-page-heading"><div><p class="ws-eyebrow">YOUR ACCOUNT / SECURITY</p><h1>A little extra peace of mind.</h1><p>Protect your account and keep track of where you’re signed in.</p></div><form method="post" action="{{ route('workspace.logout') }}">@csrf<button class="ws-link">Sign out</button></form></header>
 @if($errors->any())<div class="ws-alert ws-error" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
 @if(session('security_success'))<div class="ws-alert ws-success" role="status">{{ session('security_success') }}</div>@endif
-@if(config('security.allow_review_skip') && !$state?->enabled_at)
+@if(config('security.allow_review_skip') && !config('security.require_admin_mfa') && !$state?->enabled_at)
 <section class="ws-security-top"><div><h2>Your school day is waiting.</h2><p>You can set up your authenticator later.</p></div><form method="post" action="{{ route('security.skip') }}">@csrf<button type="submit" class="ws-btn">Skip to dashboard <span aria-hidden="true">→</span></button></form></section>
 @endif
 @if(session('recovery_codes'))<section class="ws-card">@include('workspace.form-heading',['icon'=>'key','tone'=>'orange','title'=>'Save your recovery codes','description'=>'Each code works once. Keep them in a secure password manager.'])<ul class="ws-recovery-codes">@foreach(session('recovery_codes') as $code)<li><code>{{ $code }}</code></li>@endforeach</ul></section>@endif

@@ -46,6 +46,10 @@ class DashboardController extends Controller
     public function index(Request $request, string $page = 'home')
     {
         if ($page === 'files') { return app(FilesController::class)->index($request); }
+        // People & access now lives in the Parents, Teachers and Staff directories.
+        if ($page === 'people' && !$request->expectsJson()) {
+            return app(DirectoryController::class)->index($request, in_array($request->query('role'), ['parent', 'teacher', 'staff'], true) ? $request->query('role') : 'parent');
+        }
         if (!$request->input('context') && $request->user()->hasRole('Super Admin') && !$this->access->contexts($request->user())) {
             return $request->expectsJson() ? response()->json(['contexts' => [], 'platform_dashboard' => route('home')]) : redirect()->route('home');
         }
@@ -68,16 +72,29 @@ class DashboardController extends Controller
         if ($page === 'updates') { $items = $this->dashboard->updates($request->user(), $context)->paginate(20)->withQueryString(); }
         if ($page === 'messages') { $items = $this->dashboard->messages($request->user(), $context)->paginate(20)->withQueryString(); }
         if ($page === 'schedule') { $items = $this->dashboard->appointments($request->user(), $context)->paginate(20)->withQueryString(); }
-        if (in_array($page, ['events', 'notices'])) { $items = $this->dashboard->posts($context, $page === 'events' ? 'event' : 'notice')->paginate(20)->withQueryString(); }
+        if (in_array($page, ['events', 'notices'])) {
+            $manage = $this->access->can($context, $page === 'events' ? 'events.manage' : 'notices.publish') && in_array($context['role'], [...\App\Services\WorkspaceAnalytics::ADMIN_ROLES, 'staff'], true);
+            $items = $this->dashboard->posts($context, $page === 'events' ? 'event' : 'notice', $manage)->paginate(20)->withQueryString();
+        }
         $members = $guardians = collect();
+        $overview = [];
+        if ($page === 'home' && in_array($context['role'], \App\Services\WorkspaceAnalytics::ADMIN_ROLES, true)) {
+            $analytics = app(\App\Services\WorkspaceAnalytics::class);
+            [$from, $to, $grain] = $analytics->window(now()->subMonths(5)->startOfMonth()->toDateString(), null, 'month');
+            $overview = ['attention' => $analytics->attention($context, $request->user()), 'signups' => $analytics->recentSignups($context),
+                'chart' => $analytics->series($context, $from, $to, $grain), 'upcoming' => $analytics->upcomingMeetings($context),
+                'completion' => $analytics->reportCompletion($context, $from, $to), 'breakdown' => $analytics->breakdown($context),
+                'video' => $analytics->totals($context, now()->startOfMonth()->toImmutable(), now()->endOfDay()->toImmutable())];
+        }
         if ($page === 'people') {
+            $request->validate(['role' => 'nullable|in:parent,teacher,staff,school_admin,district_admin']);
             $members = DB::table('workspace_memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')
-                ->whereIn('m.school_id', array_keys($context['schools']))->whereNull('u.deleted_at')
+                ->whereIn('m.school_id', array_keys($context['schools']))->whereNull('u.deleted_at')->when($request->role, fn ($q) => $q->where('m.role', $request->role))
                 ->select('m.*', 'u.first_name', 'u.last_name', 'u.email')->orderByDesc('m.id')->paginate(20)->withQueryString();
             $guardians = DB::table('workspace_guardians as g')->join('users as u', 'u.id', '=', 'g.guardian_id')
                 ->whereIn('g.school_id', array_keys($context['schools']))->select('g.*', 'u.first_name', 'u.last_name')->orderByDesc('g.id')->limit(50)->get();
         }
-        return view('workspace.index', $data + ['timezone' => $timezone, 'formatTime' => fn($date, $format = 'j M Y · H:i') => \Carbon\Carbon::parse($date, 'UTC')->timezone($timezone)->format($format), 'page' => $page, 'items' => $items, 'members' => $members, 'guardians' => $guardians,
+        return view('workspace.index', $data + ['timezone' => $timezone, 'formatTime' => fn($date, $format = 'j M Y · H:i') => \Carbon\Carbon::parse($date, 'UTC')->timezone($timezone)->format($format), 'page' => $page, 'items' => $items, 'members' => $members, 'overview' => $overview, 'guardians' => $guardians,
             'contexts' => $this->access->webContexts($request->user()), 'access' => $this->access,
             'classTeachers' => $page === 'classes' ? DB::table('workspace_memberships as m')->join('users as u','u.id','=','m.user_id')->whereIn('m.school_id',array_keys($context['schools']))->where('m.role','teacher')->where('m.status','active')->where('u.status',1)->whereNull('u.deleted_at')->whereNotNull('u.email_verified_at')->where(function ($q) { $q->whereNull('m.starts_at')->orWhere('m.starts_at','<=',now()); })->where(function ($q) { $q->whereNull('m.ends_at')->orWhere('m.ends_at','>',now()); })->select('u.id','u.first_name','u.last_name','m.school_id')->get() : collect(),
             'updateStudents' => $page === 'updates' ? $this->access->students($request->user(), $context)->when($request->student_id, function ($q) use ($request) { $q->where('students.id', $request->student_id); })->with('user:id,first_name,last_name')->limit(200)->get() : collect(),
@@ -115,21 +132,71 @@ class DashboardController extends Controller
         return $this->done($request, 'Class section and teacher assignment saved.');
     }
 
+    /**
+     * Publishes an announcement or event to one school, a district, or every school in
+     * scope, for one audience, now or at a scheduled time.
+     */
     public function post(Request $request)
     {
-        $context = $this->schoolContext($request);
+        $context = $this->context($request);
         $data = $request->validate(['kind' => 'required|in:notice,event', 'title' => 'required|string|max:160',
             'body' => 'required|string|max:5000', 'audience' => ['required', Rule::in(['all', 'parent', 'teacher', 'staff', 'school_admin', 'district_admin'])],
-            'starts_at' => 'nullable|required_if:kind,event|date']);
-        abort_unless($this->access->can($context, $data['kind'] === 'event' ? 'events.manage' : 'notices.publish'), 403);
-        DB::transaction(function () use ($request, $data) {
-            if (!empty($data['starts_at'])) { $data['starts_at'] = \Carbon\Carbon::parse($data['starts_at'], $this->timezone($request->user()))->utc(); abort_if($data['starts_at']->isPast(), 422, 'The event must start in the future.'); }
-            $id = DB::table('workspace_posts')->insertGetId($data + ['school_id' => $request->school_id, 'author_id' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]);
-            $this->access->audit($request->user(), $request->school_id, 'post.created', $id);
+            'target' => 'nullable|in:school,district,all', 'school_id' => ['required_if:target,school', 'nullable', 'integer', Rule::in(array_keys($context['schools']))],
+            'district_id' => 'required_if:target,district|nullable|integer', 'publish_at' => 'nullable|date',
+            'starts_at' => 'nullable|required_if:kind,event|date'], ['school_id.required_if' => 'Choose the school to publish to.', 'district_id.required_if' => 'Choose the district to publish to.']);
+        $target = $data['target'] ?? 'school';
+        if ($target === 'school' && empty($data['school_id'])) { abort(422, 'Choose the school to publish to.'); }
+        $schools = $this->targetSchools($context, $target, $data);
+        abort_unless($schools, 422, 'There are no active schools in the chosen audience.');
+        $scoped = $context; $scoped['schools'] = array_intersect_key($context['schools'], array_flip($schools));
+        abort_unless($this->access->can($scoped, $data['kind'] === 'event' ? 'events.manage' : 'notices.publish'), 403);
+        $timezone = $this->timezone($request->user());
+        $publishAt = !empty($data['publish_at']) ? \Carbon\Carbon::parse($data['publish_at'], $timezone)->utc() : null;
+        if ($publishAt && $publishAt->lte(now()->addMinute())) { $publishAt = null; }
+        abort_if($publishAt && $publishAt->gt(now()->addDays(180)), 422, 'Schedule within the next 180 days.');
+        $startsAt = !empty($data['starts_at']) ? \Carbon\Carbon::parse($data['starts_at'], $timezone)->utc() : null;
+        abort_if($startsAt && $startsAt->isPast(), 422, 'The event must start in the future.');
+        abort_if($startsAt && $publishAt && $startsAt->lte($publishAt), 422, 'The event must start after it is published.');
+        $count = 0;
+        DB::transaction(function () use ($request, $data, $schools, $publishAt, $startsAt, &$count) {
             $notifications = app(\App\Services\WorkspaceNotifications::class);
-            $notifications->record((int)$request->school_id, $data['kind'], $id, 'post:'.$id, $notifications->audience((int)$request->school_id, $data['audience']));
+            foreach ($schools as $schoolId) {
+                $id = DB::table('workspace_posts')->insertGetId(['kind' => $data['kind'], 'title' => $data['title'], 'body' => $data['body'], 'audience' => $data['audience'],
+                    'starts_at' => $startsAt, 'publish_at' => $publishAt, 'notified_at' => $publishAt ? null : now(),
+                    'school_id' => $schoolId, 'author_id' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+                $this->access->audit($request->user(), $schoolId, $publishAt ? 'post.scheduled' : 'post.created', $id);
+                if (!$publishAt) { $count += count($recipients = $notifications->audience($schoolId, $data['audience'])); $notifications->record($schoolId, $data['kind'], $id, 'post:'.$id, $recipients); }
+            }
         });
-        return $this->done($request, 'Published to the selected school and audience.');
+        $where = count($schools) === 1 ? '1 school' : count($schools).' schools';
+        return $this->done($request, $publishAt
+            ? 'Scheduled for '.$publishAt->copy()->timezone($timezone)->format('j M Y · H:i').' ('.$timezone.') to '.$where.'.'
+            : 'Published to '.$where.'. '.$count.' '.\Illuminate\Support\Str::plural('person', $count).' notified.');
+    }
+
+    /** School ids for a publishing target, limited to the context and to active schools. */
+    private function targetSchools(array $context, string $target, array $data): array
+    {
+        $scope = array_keys($context['schools']);
+        $ids = match ($target) {
+            'school' => [(int) $data['school_id']],
+            'district' => DB::table('workspace_district_schools')->where('district_id', (int) $data['district_id'])->whereIn('school_id', $scope)->pluck('school_id')->all(),
+            default => $scope,
+        };
+        return DB::table('schools')->whereIn('id', $ids)->where('status', 'active')->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /** How many people a draft announcement would reach, shown before publishing. */
+    public function recipients(Request $request)
+    {
+        $context = $this->context($request);
+        $data = $request->validate(['audience' => ['required', Rule::in(['all', 'parent', 'teacher', 'staff', 'school_admin', 'district_admin'])],
+            'target' => 'required|in:school,district,all', 'school_id' => ['nullable', 'integer', Rule::in(array_keys($context['schools']))], 'district_id' => 'nullable|integer']);
+        if ($data['target'] === 'school' && empty($data['school_id'])) { return response()->json(['recipients' => 0, 'schools' => 0]); }
+        $schools = $this->targetSchools($context, $data['target'], $data);
+        $notifications = app(\App\Services\WorkspaceNotifications::class);
+        $people = collect($schools)->flatMap(fn ($id) => $notifications->audience($id, $data['audience']))->unique()->count();
+        return response()->json(['recipients' => $people, 'schools' => count($schools)]);
     }
 
     public function update(Request $request)

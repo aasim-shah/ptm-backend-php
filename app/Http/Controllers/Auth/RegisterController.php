@@ -63,7 +63,7 @@ class RegisterController extends Controller
                 'status' => false,
                 'message' => 'validation error',
                 'errors' => $validateUser->errors()
-            ], 401);
+            ], 422);
         }
 
     }
@@ -90,7 +90,7 @@ class RegisterController extends Controller
                 'status' => false,
                 'message' => 'validation error',
                 'errors' => $validateUser->errors()
-            ], 401);
+            ], 422);
         }
 
         $user= User::create([

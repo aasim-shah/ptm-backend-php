@@ -20,7 +20,7 @@ class SecurityController extends Controller
         }
         return response()->view('security.index', ['state' => $state, 'secret' => $secret,
             'required' => $this->security->required($request->user()), 'currentHash' => hash('sha256', $request->session()->getId()),
-            'sessions' => DB::table('account_sessions')->where('user_id', $request->user()->id)->whereNull('revoked_at')->orderByDesc('last_seen_at')->limit(30)->get()])->header('Cache-Control', 'no-store, private');
+            'sessions' => DB::table('account_sessions')->where('user_id', $request->user()->id)->whereNull('revoked_at')->where('last_seen_at', '>', now()->subMinutes((int) config('session.lifetime', 120)))->orderByDesc('last_seen_at')->limit(30)->get()])->header('Cache-Control', 'no-store, private');
     }
 
     public function begin(Request $request)
@@ -33,7 +33,7 @@ class SecurityController extends Controller
 
     public function skip(Request $request)
     {
-        abort_unless(config('security.allow_review_skip') && !$this->security->state($request->user())?->enabled_at, 403);
+        abort_unless(config('security.allow_review_skip') && !config('security.require_admin_mfa') && !$this->security->state($request->user())?->enabled_at, 403, 'Two-step sign-in is required for administrators.');
         $request->session()->regenerate();
         $request->session()->put(['review_skip_user' => $request->user()->id, 'review_skip_at' => now()->timestamp]);
         app(\App\Services\WorkspaceAccess::class)->audit($request->user(), null, 'security.review-enrollment.skipped', $request->user()->id);

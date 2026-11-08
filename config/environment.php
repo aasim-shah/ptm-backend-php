@@ -40,8 +40,10 @@ return [
     'PAYPAL_SANDBOX_ID' => env('PAYPAL_SANDBOX_ID'),
     'PAYPAL_SANDBOX_SECRET' => env('PAYPAL_SANDBOX_SECRET'),
     'PAYPAL_WEBHOOK_ID' => env('PAYPAL_WEBHOOK_ID'),
+    // user_subscription.call_count and remaining_time are NOT NULL, so trial and premium limits need
+    // safe defaults when a deployment omits them (matching .env.example).
     'PREMIUM' => env('PREMIUM'),
-    'PREMIUM_CALL_COUNT' => env('PREMIUM_CALL_COUNT'),
+    'PREMIUM_CALL_COUNT' => (int) env('PREMIUM_CALL_COUNT', 100),
     'PREMIUM_PRICE' => env('PREMIUM_PRICE'),
     'PUSH_KEY' => env('PUSH_KEY'),
     'RAZORPAY_API_KEY' => env('RAZORPAY_API_KEY'),
@@ -51,8 +53,8 @@ return [
     'SENDGRID_API_KEY' => env('SENDGRID_API_KEY'),
     'STRIPE_SECRET_KEY' => env('STRIPE_SECRET_KEY'),
     'STRIPE_WEBHOOK_SECRET' => env('STRIPE_WEBHOOK_SECRET'),
-    'TRAIL' => env('TRAIL'),
-    'TRAIL_CALL_COUNT' => env('TRAIL_CALL_COUNT'),
-    'TRAIL_DAYS' => env('TRAIL_DAYS'),
+    'TRAIL' => (int) env('TRAIL', 60),
+    'TRAIL_CALL_COUNT' => (int) env('TRAIL_CALL_COUNT', 5),
+    'TRAIL_DAYS' => (int) env('TRAIL_DAYS', 5),
     'TRUSTED_PROXIES' => env('TRUSTED_PROXIES'),
 ];

@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Broadcast;
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
+// Chat realtime: each user listens on their own private channel.
+Broadcast::channel('chat.user.{id}', fn ($user, $id) => (int) $user->id === (int) $id);
 Broadcast::channel('agora-online-channel', function ($user) {
     return ['id' => $user->id, 'name' => $user->first_name];
 });

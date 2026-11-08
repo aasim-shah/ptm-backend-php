@@ -66,6 +66,7 @@ class StudentController
             ->with('student.class_section.class')
             ->with('student.father')
             ->with('student.mother')
+            ->with('student.guardian')
             ->with('userSchool.school')
             ->whereHas('student', function ($query) use ($userID, $class_id, $scope, $schoolIds) {
                 $query->where('class_status','ACCEPTED');
@@ -79,6 +80,7 @@ class StudentController
                     }
                 });
             })->orderBy('first_name', 'ASC')->get();
+        $this->appendPrimaryParent($students);
 
         if ($students) {
             $response = array(
@@ -96,6 +98,19 @@ class StudentController
 
         return response()->json($response);
     }
+
+    /**
+     * Adds primary_parent (mother, then father, then guardian) and the applicant's
+     * relationship to each student user in a list.
+     */
+    private function appendPrimaryParent($students): void
+    {
+        foreach ($students as $student) {
+            $student->setAttribute('primary_parent', $student->student?->primaryParentSummary());
+            $student->setAttribute('relationship', $student->student?->relationship);
+        }
+    }
+
     public function classSectionStudentsRequests(Request $request)
     {
         $name = $request->get('name');
@@ -112,6 +127,7 @@ class StudentController
             ->with('student.class_section.class')
             ->with('student.father')
             ->with('student.mother')
+            ->with('student.guardian')
             ->with('userSchool.school')
             ->whereHas('student', function ($query) use ($userID, $class_id) {
                 $query->where('class_status','PENDING');
@@ -120,6 +136,8 @@ class StudentController
                     $query->where('class_id', $class_id);
                 });
             })->orderBy('first_name', 'ASC')->get();
+        // Who applied: the teacher sees the applying parent or guardian (QA-11).
+        $this->appendPrimaryParent($students);
 
         if ($students) {
             $response = array(
@@ -894,13 +912,26 @@ class StudentController
 
         $student_id = $request->student_id;
 
-        $parentIds = Students::where('user_id',$student_id)->get()
+        $studentRows = Students::where('user_id',$student_id)->get();
+        $parentIds = $studentRows
             ->flatMap(fn (Students $student) => $student->parentUserIds())->unique()->values()->all();
 
         $parents = User::where('type','parent')
             ->whereIn('id',$parentIds)
             ->orderBy('first_name','ASC')
             ->get();
+        // Mother / Father / Guardian (or the applicant's own wording) per parent.
+        $labels = ['mother_id' => 'Mother', 'father_id' => 'Father', 'guardian_id' => 'Guardian'];
+        foreach ($parents as $parent) {
+            foreach ($studentRows as $studentRow) {
+                $column = collect($labels)->keys()->first(fn ($column) => (int) $studentRow->{$column} === (int) $parent->id);
+                if ($column) {
+                    $parent->setAttribute('relationship', $studentRow->relationship && Students::guardianSlot($studentRow->relationship) === $column
+                        ? $studentRow->relationship : $labels[$column]);
+                    break;
+                }
+            }
+        }
 
         $response = array(
             'error' => false,

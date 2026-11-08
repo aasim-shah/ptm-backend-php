@@ -51,7 +51,8 @@
                             <div class="form-group col-md-4 col-sm-12">
                                 <label>{{__('mail_password')}}</label>
                                 <div class="input-group">
-                                    <input id="password" name="mail_password" value="{{!config('environment.DEMO_MODE') ? (config('environment.MAIL_PASSWORD') ? config('environment.MAIL_PASSWORD') : "" ) : 'xxxxxxxxxxxxxxxxxxxx' }}" type="password" required placeholder="{{__('mail_password')}}" class="form-control" />
+                                    {{-- Secrets are never sent to the browser (QA D1). An empty field keeps the saved password. --}}
+                                    <input id="password" name="mail_password" value="" type="password" autocomplete="new-password" placeholder="{{ config('environment.MAIL_PASSWORD') ? 'Saved. Leave empty to keep it' : __('mail_password') }}" class="form-control" />
                                     <div class="input-group-append">
                                         <span class="input-group-text">
                                             <i class="fa fa-eye-slash" id="togglePassword"></i>

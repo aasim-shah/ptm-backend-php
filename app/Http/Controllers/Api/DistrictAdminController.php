@@ -8,6 +8,7 @@ use App\Models\District;
 use App\Models\Schools;
 use App\Services\RoleContextService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -68,6 +69,7 @@ class DistrictAdminController extends Controller
             'status' => $request->input('status', 'active'),
         ]);
         AuditLog::record($request->user()->id, 'district.created', $district);
+        app(\App\Services\DistrictSync::class)->fromApp($district->id);
 
         return response()->json(['error' => false, 'message' => 'District created', 'data' => $district->load('country'), 'code' => 201], 201);
     }
@@ -97,6 +99,7 @@ class DistrictAdminController extends Controller
 
         $district->fill($request->only(['name', 'status']))->save();
         AuditLog::record($request->user()->id, 'district.updated', $district, null, $request->only(['name', 'status']));
+        app(\App\Services\DistrictSync::class)->fromApp($district->id);
 
         return response()->json(['error' => false, 'message' => 'District updated', 'data' => $district->load('country'), 'code' => 200]);
     }
@@ -130,6 +133,10 @@ class DistrictAdminController extends Controller
 
         Schools::whereIn('id', $schoolIds)->update(['district_id' => $district->id]);
         AuditLog::record($request->user()->id, 'district.schools_assigned', $district, null, ['school_ids' => $schoolIds]);
+        $sync = app(\App\Services\DistrictSync::class);
+        $sync->fromApp($district->id);
+        // A school moved here may have left another web district; refresh those too.
+        foreach (DB::table('workspace_districts')->whereNotNull('app_district_id')->where('app_district_id', '!=', $district->id)->pluck('app_district_id') as $other) { $sync->fromApp((int) $other); }
 
         return response()->json([
             'error' => false,

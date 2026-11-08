@@ -72,8 +72,9 @@ class Students extends Model
         return $this->belongsTo(Parents::class, 'mother_id','user_id');
     }
 
+    // guardian_id holds a users.id like father_id and mother_id.
     public function guardian() {
-        return $this->belongsTo(Parents::class, 'guardian_id');
+        return $this->belongsTo(Parents::class, 'guardian_id','user_id');
     }
 
     /**
@@ -105,6 +106,34 @@ class Students extends Model
     /** The parent who gets per-student notification logs and school links. */
     public function primaryParentId() {
         return $this->mother_id ?? $this->father_id ?? $this->guardian_id;
+    }
+
+    /**
+     * The primary parent (mother, then father, then guardian) for API lists:
+     * {id (users.id), first_name, last_name, relationship, email, mobile}, or null.
+     * Load mother/father/guardian first to avoid extra queries.
+     */
+    public function primaryParentSummary(): ?array {
+        $slots = ['mother_id' => ['mother', 'Mother'], 'father_id' => ['father', 'Father'], 'guardian_id' => ['guardian', 'Guardian']];
+        foreach ($slots as $column => [$relation, $label]) {
+            if (!$this->{$column}) {
+                continue;
+            }
+            $parent = $this->{$relation};
+            $user = $parent ? null : User::find($this->{$column});
+            // The applicant's own wording (e.g. "Legal Guardian", "Grandfather") for their slot.
+            $relationship = $this->relationship && self::guardianSlot($this->relationship) === $column
+                ? $this->relationship : $label;
+            return [
+                'id' => (int) $this->{$column},
+                'first_name' => $parent->first_name ?? $user?->first_name,
+                'last_name' => $parent->last_name ?? $user?->last_name,
+                'relationship' => $relationship,
+                'email' => $parent->email ?? $user?->email,
+                'mobile' => $parent->mobile ?? $user?->mobile,
+            ];
+        }
+        return null;
     }
 
     public function scopeOfParent($query, $userId) {
