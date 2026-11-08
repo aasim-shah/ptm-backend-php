@@ -191,7 +191,9 @@ class AdminDashboardTest extends TestCase
         $this->post('/workspace/support/'.$id.'/replies', ['context' => $schoolContext, 'body' => 'Still failing'])->assertRedirect();
         $this->assertSame('open', DB::table('workspace_support_tickets')->value('status'));
         $this->post('/workspace/support/'.$id.'/status', ['context' => $schoolContext, 'status' => 'closed'])->assertRedirect();
-        $this->post('/workspace/support/'.$id.'/replies', ['context' => $schoolContext, 'body' => 'Again'])->assertStatus(422);
+        // A rejected form returns to the page with a readable message (QA D22).
+        $this->post('/workspace/support/'.$id.'/replies', ['context' => $schoolContext, 'body' => 'Again'])->assertRedirect()->assertSessionHasErrors('action');
+        $this->postJson('/workspace/support/'.$id.'/replies', ['context' => $schoolContext, 'body' => 'Again'])->assertStatus(422);
 
         // Sub-Super Admins handle tickets only with support.manage.
         [$sub, $subContext] = $panels['sub_super_admin'];

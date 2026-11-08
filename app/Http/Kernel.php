@@ -79,6 +79,7 @@ class Kernel extends HttpKernel
         'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
         'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         'Role'=>\App\Http\Middleware\CheckRole::class,
+        'legacy.admin' => \App\Http\Middleware\LegacyAdminPanel::class,
         'checkChild'=>\App\Http\Middleware\CheckChild::class,
         'language' => \App\Http\Middleware\LanguageManager::class,
         'checkStudent'=>\App\Http\Middleware\CheckStudent::class,

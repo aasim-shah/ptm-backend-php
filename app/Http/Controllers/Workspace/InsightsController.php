@@ -30,8 +30,10 @@ class InsightsController extends Controller
 
     private function page(Request $request, array $context, string $page, array $data)
     {
+        $timezone = DB::table('workspace_profiles')->where('user_id', $request->user()->id)->value('timezone') ?? 'UTC';
         return view('workspace.'.$page, $data + ['context' => $context, 'contexts' => $this->access->webContexts($request->user()),
-            'access' => $this->access, 'page' => $page]);
+            'access' => $this->access, 'page' => $page, 'timezone' => $timezone,
+            'formatTime' => fn ($date, $format = 'j M Y · H:i') => $date ? \Carbon\Carbon::parse($date, 'UTC')->timezone($timezone)->format($format) : '—']);
     }
 
     public function analytics(Request $request)
@@ -52,7 +54,7 @@ class InsightsController extends Controller
         $context = $this->context($request);
         [$from, $to] = $this->window($request, 30);
         $calls = DB::table('call_usage_ledger as l')->join('users as u', 'u.id', '=', 'l.user_id')->whereBetween('l.created_at', [$from, $to])
-            ->when($context['role'] !== 'super_admin', fn ($q) => $q->whereIn('l.user_id', $this->analytics->scopedUsers($context)))
+            ->when(!WorkspaceAccess::platformWide($context), fn ($q) => $q->whereIn('l.user_id', $this->analytics->scopedUsers($context)))
             ->select('l.id', 'l.seconds', 'l.source', 'l.created_at', 'u.first_name', 'u.last_name')->orderByDesc('l.id')->paginate(20)->withQueryString();
         $meetings = DB::table('workspace_appointments')->whereIn('school_id', array_keys($context['schools']))->where('starts_at', '>=', now())
             ->whereIn('status', ['pending', 'accepted'])->orderBy('starts_at')->limit(8)->get();
@@ -120,18 +122,36 @@ class InsightsController extends Controller
     {
         $context = $this->context($request);
         abort_unless($this->access->can($context, 'audit.view'), 403);
-        $request->validate(['action' => 'nullable|string|max:80']);
+        $filters = $request->validate(['action' => 'nullable|string|max:80', 'q' => 'nullable|string|max:120', 'from' => 'nullable|date', 'to' => 'nullable|date',
+            'school_id' => ['nullable', 'integer', Rule::in(array_keys($context['schools']))], 'category' => 'nullable|in:'.implode(',', array_keys(self::AUDIT_CATEGORIES))]);
+        $like = fn ($v) => '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $v).'%';
         $entries = DB::table('workspace_audit as a')->leftJoin('users as u', 'u.id', '=', 'a.actor_id')->leftJoin('schools as s', 's.id', '=', 'a.school_id')
-            ->when($context['role'] !== 'super_admin', fn ($q) => $q->whereIn('a.school_id', array_keys($context['schools'])))
-            ->when($request->action, fn ($q) => $q->where('a.action', 'like', str_replace(['%', '_'], ['\%', '\_'], $request->action).'%'))
-            ->select('a.*', 'u.first_name', 'u.last_name', 's.school_name')->orderByDesc('a.id')->paginate(30)->withQueryString();
-        return $this->page($request, $context, 'audit', ['entries' => $entries]);
+            ->when(!WorkspaceAccess::platformWide($context), fn ($q) => $q->whereIn('a.school_id', array_keys($context['schools'])))
+            ->when($filters['school_id'] ?? null, fn ($q, $id) => $q->where('a.school_id', $id))
+            ->when($filters['action'] ?? null, fn ($q, $v) => $q->where('a.action', 'like', str_replace(['%', '_'], ['\%', '\_'], $v).'%'))
+            ->when($filters['category'] ?? null, fn ($q, $c) => $q->where(fn ($q) => collect(self::AUDIT_CATEGORIES[$c][1])->each(fn ($p) => $q->orWhere('a.action', 'like', $p.'%'))))
+            ->when($filters['q'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('u.first_name', 'like', $like($v))->orWhere('u.last_name', 'like', $like($v))->orWhere('u.email', 'like', $like($v))
+                ->orWhereRaw("CONCAT(u.first_name, ' ', u.last_name) LIKE ?", [$like($v)])))
+            ->when($filters['from'] ?? null, fn ($q, $d) => $q->where('a.created_at', '>=', \Carbon\Carbon::parse($d)->startOfDay()))
+            ->when($filters['to'] ?? null, fn ($q, $d) => $q->where('a.created_at', '<=', \Carbon\Carbon::parse($d)->endOfDay()))
+            ->select('a.*', 'u.first_name', 'u.last_name', 'u.email', 's.school_name')->orderByDesc('a.id')->paginate(30)->withQueryString();
+        $entries->setCollection(app(\App\Services\AuditPresenter::class)->present($entries->getCollection()));
+        return $this->page($request, $context, 'audit', ['entries' => $entries, 'categories' => self::AUDIT_CATEGORIES]);
     }
+
+    public const AUDIT_CATEGORIES = [
+        'signins' => ['Sign-ins & security', ['auth.', 'security.', 'account.']],
+        'people' => ['People & access', ['membership.', 'invitation.', 'guardian.', 'import.']],
+        'organizations' => ['Schools & districts', ['school.', 'district.', 'school_admin.', 'district_admin.', 'delegation.']],
+        'communications' => ['Communications', ['post.', 'update.', 'appointment.']],
+        'reports' => ['Reports & exports', ['report.']],
+        'platform' => ['Platform settings & billing', ['settings.', 'market.', 'ads.', 'plan.', 'minutes.', 'ad_free.']],
+    ];
 
     public function billing(Request $request)
     {
         $context = $this->context($request);
-        abort_unless($context['role'] === 'super_admin', 403);
+        abort_unless(WorkspaceAccess::platformWide($context), 403);
         $base = DB::table('user_subscription');
         $summary = [
             ['label' => 'Active subscriptions', 'value' => (clone $base)->where('status', 'ACTIVE')->where('expire_date', '>=', now()->toDateString())->count(), 'icon' => 'check-circle'],
@@ -139,8 +159,21 @@ class InsightsController extends Controller
             ['label' => 'Expiring in 30 days', 'value' => (clone $base)->where('status', 'ACTIVE')->whereBetween('expire_date', [now()->toDateString(), now()->addDays(30)->toDateString()])->count(), 'icon' => 'hourglass-half'],
             ['label' => 'Expired or cancelled', 'value' => (clone $base)->where(fn ($q) => $q->where('status', '!=', 'ACTIVE')->orWhere('expire_date', '<', now()->toDateString()))->count(), 'icon' => 'times-circle'],
         ];
-        $subscriptions = DB::table('user_subscription as s')->leftJoin('users as u', 'u.id', '=', 's.user_id')
-            ->select('s.*', 'u.first_name', 'u.last_name')->orderByDesc('s.created_at')->paginate(25)->withQueryString();
-        return $this->page($request, $context, 'billing', compact('summary', 'subscriptions'));
+        $filters = $request->validate(['q' => 'nullable|string|max:120', 'status' => 'nullable|in:active,trial,expiring,ended']);
+        $like = fn ($v) => '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $v).'%';
+        $subscriptions = DB::table('user_subscription as s')->leftJoin('users as u', 'u.id', '=', 's.user_id')->leftJoin('plan as p', 'p.plan_id', '=', 's.plan_id')
+            ->when($filters['q'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('s.email', 'like', $like($v))->orWhere('u.first_name', 'like', $like($v))->orWhere('u.last_name', 'like', $like($v))->orWhere('s.subscription_id', 'like', $like($v))))
+            ->when(($filters['status'] ?? null) === 'active', fn ($q) => $q->where('s.status', 'ACTIVE')->where('s.expire_date', '>=', now()->toDateString()))
+            ->when(($filters['status'] ?? null) === 'trial', fn ($q) => $q->where('s.type', \App\Models\Plan::TRAIL)->where('s.status', 'ACTIVE'))
+            ->when(($filters['status'] ?? null) === 'expiring', fn ($q) => $q->where('s.status', 'ACTIVE')->whereBetween('s.expire_date', [now()->toDateString(), now()->addDays(30)->toDateString()]))
+            ->when(($filters['status'] ?? null) === 'ended', fn ($q) => $q->where(fn ($q) => $q->where('s.status', '!=', 'ACTIVE')->orWhere('s.expire_date', '<', now()->toDateString())))
+            ->select('s.*', 'u.first_name', 'u.last_name', 'p.name as plan_name')->orderByDesc('s.created_at')->paginate(25)->withQueryString();
+        $plans = DB::table('plan')->orderByDesc('status')->orderBy('name')->get();
+        $subscribers = DB::table('user_subscription')->where('status', 'ACTIVE')->selectRaw('plan_id, COUNT(*) as total')->groupBy('plan_id')->pluck('total', 'plan_id');
+        $adjustments = DB::table('workspace_audit as a')->leftJoin('users as u', 'u.id', '=', 'a.actor_id')->where('a.action', 'minutes.adjusted')
+            ->select('a.*', 'u.first_name', 'u.last_name')->orderByDesc('a.id')->limit(10)->get();
+        $settings = app(\App\Services\PlatformSettings::class);
+        $trial = ['minutes' => $settings->get('trial.minutes'), 'days' => $settings->get('trial.days'), 'calls' => $settings->get('trial.call_count'), 'rounding' => $settings->get('video.rounding')];
+        return $this->page($request, $context, 'billing', compact('summary', 'subscriptions', 'plans', 'subscribers', 'adjustments', 'trial', 'filters'));
     }
 }

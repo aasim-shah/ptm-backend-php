@@ -20,19 +20,19 @@ class InvitationsController extends Controller
         $data=$request->validate(['school_id'=>['required','integer',Rule::in(array_keys($context['schools']))],
             'email'=>'required|email:rfc|max:191','role'=>'required|in:parent,teacher,staff','permissions'=>'nullable|array','permissions.*'=>[Rule::in(WorkspaceAccess::STAFF_PERMISSIONS)]]);
         abort_unless($access->mayDelegate($context, $data['permissions'] ?? []),403);
-        abort_unless(config('delivery.email_enabled'),422,'Configure and enable transactional email before sending invitations.');
-        $email=strtolower($data['email']); $recipient=app()->environment('production') ? $email : config('delivery.test_email');
-        abort_unless($recipient,422,'Configure a nonproduction test email recipient first.');
-        $token=bin2hex(random_bytes(32));
-        DB::transaction(function () use ($request,$access,$data,$token,$email,$recipient) {
-            $id=DB::table('workspace_invitations')->insertGetId(['school_id'=>$data['school_id'],'invited_by'=>$request->user()->id,'email'=>$email,'role'=>$data['role'],
-                'permissions'=>json_encode($data['role']==='staff' ? ($data['permissions']??[]) : []),'token_hash'=>hash('sha256',$token),'expires_at'=>now()->addHours(72),'created_at'=>now(),'updated_at'=>now()]);
-            $link=URL::temporarySignedRoute('invitation.show',now()->addHours(72),['token'=>$token]);
-            $school=DB::table('schools')->where('id',$data['school_id'])->value('school_name');
-            Notification::route('mail',$recipient)->notify(new \App\Notifications\SchoolInvitation($link,$school));
-            $access->audit($request->user(),$data['school_id'],'invitation.sent',$id);
-        });
+        app(\App\Services\WorkspaceInvitations::class)->send($request->user(), (int) $data['school_id'], $data['email'], $data['role'], $data['permissions'] ?? []);
         return $request->expectsJson() ? response()->json(['message'=>'Invitation queued.'],202) : back()->with('workspace_success','Invitation queued for secure email delivery.');
+    }
+
+    public function revoke(Request $request, int $id, WorkspaceAccess $access)
+    {
+        $context=$access->resolve($request->user(),$request->input('context'));
+        abort_unless($access->can($context,'memberships.manage'),403);
+        $updated=DB::table('workspace_invitations')->where('id',$id)->whereIn('school_id',array_keys($context['schools']))
+            ->whereNull('accepted_at')->whereNull('revoked_at')->update(['revoked_at'=>now(),'updated_at'=>now()]);
+        abort_unless($updated,404);
+        $access->audit($request->user(),DB::table('workspace_invitations')->where('id',$id)->value('school_id'),'invitation.revoked',$id);
+        return $request->expectsJson() ? response()->json(['message'=>'Invitation withdrawn.']) : back()->with('workspace_success','Invitation withdrawn. The link no longer works.');
     }
 
     private function invitation(string $token)

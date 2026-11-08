@@ -28,7 +28,7 @@ class WorkspaceSupport
     {
         $q = DB::table('workspace_support_tickets as t')->join('users as r', 'r.id', '=', 't.requester_id')->leftJoin('schools as s', 's.id', '=', 't.school_id')
             ->select('t.*', 'r.first_name', 'r.last_name', 'r.email', 's.school_name');
-        if ($context && $context['role'] === 'super_admin') { return $q; }
+        if ($context && WorkspaceAccess::platformWide($context)) { return $q; }
         $schools = $context ? array_keys($context['schools']) : [];
         $institution = $context && ($this->handles($context) || in_array($context['role'], ['school_admin', 'district_admin'], true));
         return $q->where(function ($q) use ($user, $schools, $institution) {

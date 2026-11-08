@@ -20,10 +20,18 @@ class WorkspaceDashboard
         return $q->select('u.*', 'student.first_name', 'student.last_name')->orderByDesc('u.updated_at');
     }
 
-    public function posts(array $context, string $kind)
+    /**
+     * Announcements or events visible in a context. Recipients see only published posts for
+     * their audience; a publisher managing communications ($manage) sees every audience and
+     * scheduled posts too.
+     */
+    public function posts(array $context, string $kind, bool $manage = false)
     {
-        return DB::table('workspace_posts')->whereIn('school_id', array_keys($context['schools']))->where('kind', $kind)
-            ->whereIn('audience', ['all', $context['role']])->orderByDesc('created_at');
+        $q = DB::table('workspace_posts')->whereIn('school_id', array_keys($context['schools']))->where('kind', $kind);
+        if (!$manage) {
+            $q->whereIn('audience', ['all', $context['role']])->where(fn ($q) => $q->whereNull('publish_at')->orWhere('publish_at', '<=', now()));
+        }
+        return $q->orderByDesc('created_at');
     }
 
     public function messages(User $user, array $context)

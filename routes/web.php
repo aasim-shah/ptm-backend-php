@@ -82,7 +82,14 @@ Route::group(['middleware' => ['Role', 'auth']], function () {
     Route::get('meetingDetails/{id}', [\App\Http\Controllers\MeetingController::class, 'meetingDetails'])->name('meeting_details');
 
 
-    Route::group(['middleware' => 'language'], function () {
+    // Role requests (Part A7) stay available after the classic panel is retired; the web
+    // dashboard shows them under Role requests and posts its decisions here.
+    Route::get('role-requests', [\App\Http\Controllers\V2\RoleRequestController::class, 'index'])->name('role-requests.index');
+    Route::post('role-requests/{id}/permissions', [\App\Http\Controllers\V2\RoleRequestController::class, 'permissions'])->name('role-requests.permissions');
+    Route::post('role-requests/{id}/{action}', [\App\Http\Controllers\V2\RoleRequestController::class, 'action'])
+        ->where('action', 'approve|reject|suspend|reactivate|end')->name('role-requests.action');
+
+    Route::group(['middleware' => ['legacy.admin', 'language']], function () {
         Route::get('home', [HomeController::class, 'index'])->name('home');
         Route::get('/logout', [HomeController::class, 'logout'])->name('logout');
         Route::post('/logout', [HomeController::class, 'logout']);
@@ -344,11 +351,6 @@ Route::group(['middleware' => ['Role', 'auth']], function () {
         Route::get('class-users/{class_id}/{type}/{school_id}', [\App\Http\Controllers\V2\PushNotificationController::class, 'classUsers'])->name('class-users');
         Route::post('send-meeting-notification', [\App\Http\Controllers\V2\PushNotificationController::class, 'sendMeetingNotification'])->name('send-meeting-notification');
 
-        // Role requests and role contexts (staff/admin approval, Part A7)
-        Route::get('role-requests', [\App\Http\Controllers\V2\RoleRequestController::class, 'index'])->name('role-requests.index');
-        Route::post('role-requests/{id}/permissions', [\App\Http\Controllers\V2\RoleRequestController::class, 'permissions'])->name('role-requests.permissions');
-        Route::post('role-requests/{id}/{action}', [\App\Http\Controllers\V2\RoleRequestController::class, 'action'])
-            ->where('action', 'approve|reject|suspend|reactivate|end')->name('role-requests.action');
 
     });
 });

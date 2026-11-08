@@ -187,10 +187,10 @@ class SubscriptionController extends Controller
         $subscription->user_id = $user->id;
         $subscription->email = $user->email;
         $subscription->type = Plan::TRAIL;
-        $subscription->remaining_time = config('environment.TRAIL')*60;
-        $subscription->call_count = config('environment.TRAIL_CALL_COUNT');
+        $subscription->remaining_time = app(\App\Services\PlatformSettings::class)->get('trial.minutes')*60;
+        $subscription->call_count = app(\App\Services\PlatformSettings::class)->get('trial.call_count');
         $subscription->activated_date = Carbon::now()->toDateString();
-        $subscription->expire_date = Carbon::now()->addDays((config('environment.TRAIL_DAYS') ?? 5))->toDateString();
+        $subscription->expire_date = Carbon::now()->addDays((int) app(\App\Services\PlatformSettings::class)->get('trial.days'))->toDateString();
         $subscription->status = 'ACTIVE';
         $subscription->save();
 

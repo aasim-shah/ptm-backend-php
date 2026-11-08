@@ -20,7 +20,7 @@
         <div><dt>Upcoming meetings</dt><dd>{{ number_format($overview['upcoming']) }}</dd></div>
     </dl>
     <div class="ws-video-center__actions">
-        <a class="ws-btn" href="{{ $url('schedule') }}"><i class="fa fa-calendar-plus-o" aria-hidden="true"></i>Schedule video call</a>
+        @if($access->contacts(auth()->user(), $context)->exists())<a class="ws-btn" href="{{ $url('schedule') }}"><i class="fa fa-calendar-plus-o" aria-hidden="true"></i>Schedule video call</a>@endif
         <a class="ws-btn ws-btn-secondary" href="{{ $url('video') }}#upcoming"><i class="fa fa-clock-o" aria-hidden="true"></i>Upcoming calls</a>
         <a class="ws-btn ws-btn-secondary" href="{{ $url('video') }}#history"><i class="fa fa-history" aria-hidden="true"></i>Recent calls</a>
     </div>

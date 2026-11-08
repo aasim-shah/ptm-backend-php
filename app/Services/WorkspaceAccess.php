@@ -15,7 +15,21 @@ class WorkspaceAccess
     /** Ticked by default for a new Sub-Super Admin so the panel matches the agreed four-panel standard. */
     public const DEFAULT_DELEGATED_PERMISSIONS = ['analytics.view', 'reports.export'];
 
-    public const DELEGATED_PERMISSIONS = ['students.view', 'notices.publish', 'events.manage', 'memberships.manage', 'academics.manage', 'reports.export', 'audit.view', 'analytics.view', 'support.manage'];
+    public const DELEGATED_PERMISSIONS = ['students.view', 'notices.publish', 'events.manage', 'memberships.manage', 'academics.manage', 'reports.export', 'audit.view', 'analytics.view', 'support.manage', 'organizations.manage'];
+    /** Plain-language names shown wherever an administrator grants or reviews a permission. */
+    public const PERMISSION_LABELS = [
+        'web.access' => ['Web panel access', 'Sign in to this web panel, not only the mobile app.'],
+        'students.view' => ['View students', 'See student lists, classes and guardian status.'],
+        'notices.publish' => ['Publish announcements', 'Send announcements to parents, teachers and staff.'],
+        'events.manage' => ['Manage events', 'Create school events and calendar items.'],
+        'memberships.manage' => ['Manage people & access', 'Invite, connect and revoke parents, teachers and staff, and verify guardians.'],
+        'academics.manage' => ['Manage classes', 'Create class sections and assign class teachers.'],
+        'reports.export' => ['Reports & exports', 'Download reports as Excel, CSV or PDF.'],
+        'audit.view' => ['View activity log', 'Read the audit trail of administrative actions.'],
+        'analytics.view' => ['View analytics', 'See growth, engagement and video usage charts.'],
+        'support.manage' => ['Handle support tickets', 'Reply to and resolve support tickets.'],
+        'organizations.manage' => ['Edit school profiles', 'Update school names, addresses and contact details.'],
+    ];
     public const STAFF_PERMISSIONS = ['web.access', 'students.view', 'notices.publish', 'events.manage'];
 
     public function memberships(User $user)
@@ -32,23 +46,23 @@ class WorkspaceAccess
         if ($user->hasRole('Super Admin')) {
             $contexts[] = ['id' => 'platform', 'role' => 'super_admin', 'label' => 'Super Admin',
                 'organization' => 'Full platform', 'schools' => DB::table('schools')->pluck('school_name', 'id')->all(),
-                'permissions' => [], 'membership_id' => null];
+                'permissions' => [], 'membership_id' => null, 'platform' => true];
         }
         foreach ($this->memberships($user)->get() as $m) {
             if ($m->role === 'super_admin' || !isset(self::LABELS[$m->role])) { continue; }
             if ($m->role === 'district_admin' || ($m->role === 'sub_super_admin' && $m->district_id)) {
                 if (!$m->district_id || $m->school_id) { continue; }
                 $district = DB::table('workspace_districts')->find($m->district_id);
-                if (!$district) { continue; }
+                if (!$district || ($district->status ?? 'active') !== 'active') { continue; }
                 $schools = DB::table('schools')->join('workspace_district_schools as ds', 'ds.school_id', '=', 'schools.id')
-                    ->where('ds.district_id', $m->district_id)->pluck('schools.school_name', 'schools.id')->all();
+                    ->where('ds.district_id', $m->district_id)->where('schools.status', 'active')->pluck('schools.school_name', 'schools.id')->all();
                 $contexts[] = $this->context($m, 'm'.$m->id, $district->name, $schools);
                 foreach ($schools as $id => $name) {
                     $contexts[] = $this->context($m, 'm'.$m->id.'s'.$id, $name, [$id => $name]);
                 }
             } elseif ($m->school_id && !$m->district_id) {
                 $school = DB::table('schools')->find($m->school_id);
-                if ($school) { $contexts[] = $this->context($m, 'm'.$m->id, $school->school_name, [$school->id => $school->school_name]); }
+                if ($school && ($school->status ?? 'active') === 'active') { $contexts[] = $this->context($m, 'm'.$m->id, $school->school_name, [$school->id => $school->school_name]); }
             }
         }
         // Existing public roles can sign in, but without approved memberships no
@@ -77,8 +91,40 @@ class WorkspaceAccess
             'schools' => $schools, 'permissions' => is_array($permissions) ? $permissions : [], 'membership_id' => $m->id];
     }
 
+    /** True only for the Super Admin's full-platform context, not a support view of one organization. */
+    public static function platformWide(array $context): bool
+    {
+        return $context['role'] === 'super_admin' && ($context['platform'] ?? false);
+    }
+
+    /**
+     * A Super Admin may open one school ("platform:s12") or district ("platform:d3")
+     * to support it. The view keeps Super Admin authority but limits every list to
+     * that organization, and it is never offered to anyone else.
+     */
+    public function supportContext(User $user, string $id): ?array
+    {
+        if (!preg_match('/^platform:([sd])(\d{1,10})$/', $id, $m) || !$user->hasRole('Super Admin') || !(int) $user->status || !$user->email_verified_at) { return null; }
+        if ($m[1] === 's') {
+            $school = DB::table('schools')->find((int) $m[2]);
+            if (!$school) { return null; }
+            $name = $school->school_name; $schools = [$school->id => $school->school_name];
+        } else {
+            $district = DB::table('workspace_districts')->find((int) $m[2]);
+            if (!$district) { return null; }
+            $name = $district->name;
+            $schools = DB::table('schools')->join('workspace_district_schools as ds', 'ds.school_id', '=', 'schools.id')
+                ->where('ds.district_id', $district->id)->pluck('schools.school_name', 'schools.id')->all();
+        }
+        return ['id' => $id, 'role' => 'super_admin', 'label' => 'Super Admin', 'organization' => $name, 'schools' => $schools,
+            'permissions' => [], 'membership_id' => null, 'platform' => false, 'support_view' => true];
+    }
+
     public function resolve(User $user, ?string $id): array
     {
+        if ($id !== null && str_starts_with($id, 'platform:')) {
+            return $this->supportContext($user, $id) ?? abort(403, 'This workspace is no longer available.');
+        }
         $contexts = $this->contexts($user);
         if ($id !== null) {
             foreach ($contexts as $context) { if ($context['id'] === $id) { return $context; } }
@@ -90,6 +136,8 @@ class WorkspaceAccess
 
     public function can(array $context, string $permission): bool
     {
+        // Student updates are written by teachers and school admins, never by platform or district administrators.
+        if ($permission === 'updates.write' && in_array($context['role'], ['super_admin', 'district_admin', 'sub_super_admin'], true)) { return false; }
         if ($context['role'] === 'super_admin') { return true; }
         if ($context['role'] === 'sub_super_admin') { return in_array($permission, self::DELEGATED_PERMISSIONS, true) && in_array($permission, $context['permissions'], true); }
         if (!$context['membership_id'] || !$context['schools']) { return false; }

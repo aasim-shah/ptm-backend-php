@@ -21,7 +21,7 @@ class WorkspaceAnalytics
 
     private function platform(array $context): bool
     {
-        return $context['role'] === 'super_admin';
+        return WorkspaceAccess::platformWide($context);
     }
 
     private function active($q, string $alias = 'm')
@@ -43,12 +43,30 @@ class WorkspaceAnalytics
         return DB::table('workspace_district_schools')->whereIn('school_id', $this->schools($context))->distinct()->count('district_id');
     }
 
+    /** Legacy account roles that still identify people who have not been connected to a school yet. */
+    public const LEGACY_ROLES = ['parent' => 'Parent', 'teacher' => 'Teacher', 'staff' => 'Staff', 'school_admin' => 'Principal'];
+
+    /**
+     * Active accounts holding a role in scope. The full platform also counts accounts that
+     * registered with that role but are still awaiting a school connection, so the figure
+     * matches the People directories and exports.
+     */
     public function members(array $context, string $role): int
     {
-        return $this->active(DB::table('workspace_memberships as m')->join('users as u', 'u.id', '=', 'm.user_id'))
-            ->whereIn('m.school_id', $this->schools($context))->where('m.role', $role)
-            ->where('u.status', 1)->whereNull('u.deleted_at')->whereNotNull('u.email_verified_at')
-            ->distinct()->count('m.user_id');
+        return $this->memberQuery($context, $role)->count();
+    }
+
+    public function memberQuery(array $context, string $role)
+    {
+        $memberships = $this->active(DB::table('workspace_memberships as m'))->where('m.role', $role)->whereIn('m.school_id', $this->schools($context))->select('m.user_id');
+        return DB::table('users as u')->where('u.status', 1)->whereNull('u.deleted_at')
+            ->where(function ($q) use ($context, $role, $memberships) {
+                $q->whereIn('u.id', $memberships);
+                if ($this->platform($context) && isset(self::LEGACY_ROLES[$role])) {
+                    $q->orWhereIn('u.id', DB::table('model_has_roles as mr')->join('roles as r', 'r.id', '=', 'mr.role_id')
+                        ->where('r.name', self::LEGACY_ROLES[$role])->where('mr.model_type', \App\Models\User::class)->select('mr.model_id'));
+                }
+            });
     }
 
     /** Six primary KPI cards: four shared people counts, then two that suit the panel's scope. */

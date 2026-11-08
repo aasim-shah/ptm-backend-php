@@ -3,7 +3,7 @@
 @php
     $query = array_filter(['context' => $context['id'], 'type' => $type, 'from' => $from->toDateString(), 'to' => $to->toDateString(),
         'school_id' => request('school_id'), 'role' => request('role')]);
-    $dated = in_array($type, ['activity', 'video_usage', 'subscriptions'], true);
+    $dated = in_array($type, ['activity', 'video_usage', 'subscriptions', 'audit'], true);
 @endphp
 <header class="ws-page-heading"><div><p class="ws-eyebrow">{{ $context['label'] }} / Reports & Exports</p><h1>Reports & Exports</h1><p>Generate, filter and download reports for {{ $context['organization'] }}. Every export is recorded in the activity log.</p></div></header>
 
@@ -42,7 +42,6 @@
             <button class="ws-btn ws-btn-small ws-btn-secondary" name="format" value="pdf"><i class="fa fa-file-pdf-o" aria-hidden="true"></i>PDF</button>
             <button type="button" class="ws-btn ws-btn-small ws-btn-secondary" onclick="window.print()"><i class="fa fa-print" aria-hidden="true"></i>Print</button>
         </form>
-        </div>
     </div>
     @if($report['truncated'])<p class="ws-alert ws-error">The preview is limited to the first {{ number_format($report['limit']) }} rows. Excel and CSV exports include up to {{ number_format(\App\Services\WorkspaceReports::EXPORT_MAX_ROWS) }} rows.</p>@endif
     <div class="ws-table-wrap"><table><thead><tr>@foreach($report['columns'] as $column)<th>{{ $column }}</th>@endforeach</tr></thead><tbody>

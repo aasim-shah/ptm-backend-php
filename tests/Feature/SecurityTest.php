@@ -76,6 +76,9 @@ class SecurityTest extends TestCase
 
         $this->post('/login-web', ['email' => 'boss@example.com', 'password' => 'secret123'])
             ->assertRedirect(route('workspace.home'));
+        // QA D3: the classic panel is retired unless explicitly reopened.
+        $this->get('/home')->assertRedirect(route('workspace.home'));
+        config(['workspace.legacy_admin_enabled' => true]);
         $this->get('/home')->assertOk();
     }
 

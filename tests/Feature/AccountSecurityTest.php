@@ -33,19 +33,18 @@ class AccountSecurityTest extends TestCase
         $this->get('/security')->assertDontSee('Skip to dashboard');
     }
 
-    public function test_review_skip_allows_web_dashboard_but_not_api_and_expires(): void
+    public function test_administrators_cannot_skip_required_mfa(): void
     {
+        // QA B2: even with the review skip switched on, required admin MFA has no skip.
         config(['security.allow_review_skip' => true, 'security.require_admin_mfa' => true]);
         $u = $this->account();
         $school = DB::table('schools')->insertGetId(['user_id' => $u->id, 'country_id' => 1, 'school_name' => 'Review School', 'address' => 'Road', 'image' => '', 'post_code' => '00000']);
         DB::table('workspace_memberships')->insert(['user_id' => $u->id, 'school_id' => $school, 'role' => 'school_admin', 'status' => 'active']);
         $this->actingAs($u)->get('/dashboard')->assertRedirect(route('security.index'));
-        $this->get('/security')->assertSee('Skip to dashboard');
-        $this->post('/security/skip')->assertRedirect(route('workspace.home'));
-        $this->get('/dashboard')->assertOk();
-        $this->withToken($u->createToken('review')->plainTextToken)->getJson('/api/me/workspaces')->assertForbidden()->assertJsonPath('code', 'mfa_required');
-        $this->travel(721)->minutes();
+        $this->get('/security')->assertOk()->assertDontSee('Skip to dashboard');
+        $this->post('/security/skip')->assertForbidden();
         $this->get('/dashboard')->assertRedirect(route('security.index'));
+        $this->assertDatabaseMissing('workspace_audit', ['action' => 'security.review-enrollment.skipped']);
     }
     public function test_setup_requires_password_and_encrypts_the_secret(): void
     {

@@ -168,6 +168,13 @@ return [
     |
     */
 
-    'attributes' => [],
+    // Friendly field names, so a message reads "The school field is required." rather than "school id".
+    'attributes' => [
+        'school_id' => 'school', 'district_id' => 'district', 'student_id' => 'student', 'teacher_id' => 'class teacher',
+        'recipient_id' => 'recipient', 'participant_id' => 'school contact', 'starts_at' => 'start time', 'ends_at' => 'end time',
+        'publish_at' => 'publish time', 'post_code' => 'postcode / ZIP code', 'school_name' => 'school name', 'post_town' => 'town or city',
+        'section_name' => 'section', 'first_name' => 'first name', 'last_name' => 'last name', 'current_password' => 'current password',
+        'permissions' => 'allowed actions', 'body' => 'message', 'file' => 'file', 'seconds' => 'minutes',
+    ],
 
 ];

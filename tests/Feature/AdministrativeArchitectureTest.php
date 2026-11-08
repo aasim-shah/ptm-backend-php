@@ -56,10 +56,11 @@ class AdministrativeArchitectureTest extends TestCase
         $super=$this->user();$super->assignRole(Role::findOrCreate('Super Admin','web'));$sub=$this->user();
         $a=$this->school('Allowed School');$b=$this->school('Unrelated School');
         $this->actingAs($super)->get('/dashboard')->assertOk()->assertSee('Super Admin');
-        $this->get('/dashboard/administration?context=platform')->assertOk()->assertSee('Unrelated School');
+        $this->get('/dashboard/administration?context=platform')->assertRedirect();
+        $this->get('/dashboard/schools?context=platform')->assertOk()->assertSee('Unrelated School');
         $this->post('/workspace/delegations',['context'=>'platform','email'=>$sub->email,'school_id'=>$a,'permissions'=>['reports.export','audit.view']])->assertRedirect();
         $id=DB::table('workspace_memberships')->where('user_id',$sub->id)->value('id');$c='m'.$id;
-        $this->actingAs($sub)->get('/dashboard/administration?context='.$c)->assertOk()->assertSee('Allowed School')->assertDontSee('Unrelated School');
+        $this->actingAs($sub)->get('/dashboard/schools?context='.$c)->assertOk()->assertSee('Allowed School')->assertDontSee('Unrelated School');
         $this->get('/workspace/reports/schools.csv?context='.$c)->assertOk()->assertDownload('ptm-schools.csv');
         $this->postJson('/workspace/delegations',['context'=>$c])->assertForbidden();
         $this->get('/roles')->assertRedirect(route('login'));
@@ -83,7 +84,8 @@ class AdministrativeArchitectureTest extends TestCase
         $district=DB::table('workspace_districts')->insertGetId(['name'=>'Assigned district','market'=>'US']);
         DB::table('workspace_district_schools')->insert(['district_id'=>$district,'school_id'=>$a]);
         $id=DB::table('workspace_memberships')->insertGetId(['user_id'=>$u->id,'district_id'=>$district,'role'=>'district_admin','status'=>'active']);$c='m'.$id;
-        $this->actingAs($u)->get('/dashboard/administration?context='.$c)->assertOk()->assertDontSee('Secret unrelated school');
+        $this->actingAs($u)->get('/dashboard/schools?context='.$c)->assertOk()->assertDontSee('Secret unrelated school');
+        $this->get('/dashboard/districts?context='.$c)->assertOk()->assertSee('Assigned district');
         $response=$this->get('/workspace/reports/schools.csv?context='.$c)->assertOk();
         $this->assertStringNotContainsString('Secret unrelated school',$response->streamedContent());
         $this->post('/workspace/school-admin',['context'=>$c,'school_id'=>$a,'email'=>$target->email])->assertRedirect();
@@ -100,7 +102,8 @@ class AdministrativeArchitectureTest extends TestCase
         $s=$this->school('A');$other=$this->school('B');$ac=$this->membership($a,$s,'school_admin');$bc=$this->membership($b,$other,'school_admin');
         $this->actingAs($a)->post('/workspace/ad-free',['context'=>$ac,'school_id'=>$s,'reason'=>'Institutional coverage'])->assertRedirect();
         $id=DB::table('workspace_ad_free_requests')->value('id');
-        $this->actingAs($b)->get('/dashboard/administration?context='.$bc)->assertOk()->assertDontSee('Institutional coverage');
+        $this->actingAs($b)->get('/dashboard/ad-free?context='.$bc)->assertOk()->assertDontSee('Institutional coverage');
+        $this->actingAs($a)->get('/dashboard/ad-free?context='.$ac)->assertOk()->assertSee('Institutional coverage');
         $this->postJson('/workspace/ad-free/'.$id.'/review',['context'=>$bc,'status'=>'approved'])->assertForbidden();
         $this->actingAs($super)->post('/workspace/ad-free/'.$id.'/review',['context'=>'platform','status'=>'approved'])->assertRedirect();
         $this->assertDatabaseHas('workspace_ad_free_requests',['id'=>$id,'status'=>'approved','reviewed_by'=>$super->id]);
