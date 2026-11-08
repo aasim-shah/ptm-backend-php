@@ -402,6 +402,13 @@ class MeetingController extends Controller
                 'message' => $errorMessage,
             ]);
         }
+        if (\App\Support\MeetingTime::startIsPast($request->meeting_date, $request->meeting_time, Auth::user(), $request)) {
+            return response()->json([
+                'error' => true,
+                'status' => 400,
+                'message' => \App\Support\MeetingTime::PAST_MESSAGE,
+            ]);
+        }
 
         $stuIds = $request->student_ids;
         if (sizeof($stuIds) == 1) {

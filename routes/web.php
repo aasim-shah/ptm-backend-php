@@ -374,6 +374,18 @@ Route::group(['middleware' => ['auth', 'role:Super Admin']], function () {
     Route::get('subscription-list/{subscription_id}', [\App\Http\Controllers\Payment\SubscriptionController::class, 'subscriptionList'])->name('subscription-list');
 });
 
+// Public legal pages linked from the app (QA-05). Text saved in the admin settings
+// (privacy_policy / terms_condition) wins; otherwise a marked placeholder is shown.
+foreach (['terms' => ['terms_condition', 'legal.terms', 'policy.terms_version'], 'privacy-policy' => ['privacy_policy', 'legal.privacy', 'policy.privacy_version']] as $legalPath => [$settingType, $legalView, $versionKey]) {
+    Route::get($legalPath, function () use ($settingType, $legalView, $versionKey) {
+        $html = trim((string) \App\Models\Settings::where('type', $settingType)->value('message'));
+        $version = class_exists(\App\Services\PlatformSettings::class)
+            ? rescue(fn () => app(\App\Services\PlatformSettings::class)->get($versionKey), '2026-11', false) : '2026-11';
+        return response()->view($legalView, ['html' => $html, 'version' => $version])
+            ->header('Cache-Control', 'public, max-age=300');
+    })->name('legal.' . $legalPath);
+}
+
 Route::get('page/privacy-policy', function () {
     $settings = getSettings('privacy_policy');
     echo $settings['privacy_policy'] ?? '';

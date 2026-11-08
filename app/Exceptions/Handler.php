@@ -52,7 +52,7 @@ class Handler extends ExceptionHandler
     {
 
         if (Str::startsWith($request->getRequestUri(), '/api')) {
-            return response()->json(['status' => 400, 'error' => 'Unauthenticated.'], 401);
+            return response()->json(['status' => 400, 'error' => 'Unauthenticated.', 'message' => 'Unauthenticated.'], 401);
         }
 
 

@@ -54,6 +54,11 @@ class Chat extends Model
         return $this->belongsTo('App\Models\User','to_user_id','id');
     }
 
+    public function messages()
+    {
+        return $this->hasMany(ChatMessage::class, 'chat_id');
+    }
+
     public function getMessageAttribute(){
         $message = json_decode($this->attributes['message'],true);
         $index = 0;

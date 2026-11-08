@@ -97,6 +97,7 @@ Route::get('notifications', [\App\Http\Controllers\Api\v2\NotificationController
 Route::post('notifications-read', [\App\Http\Controllers\Api\v2\NotificationController::class, 'notificationRead'])->middleware('auth:sanctum');
 Route::post('chat/send', [\App\Http\Controllers\Api\v2\ChatController::class, 'createChat'])->middleware(['auth:sanctum', 'ptm.can:messages.use']);
 Route::post('chat/read', [\App\Http\Controllers\Api\v2\ChatController::class, 'chatRead'])->middleware(['auth:sanctum', 'ptm.can:messages.use']);
+Route::get('chat/{chat_id}/messages', [\App\Http\Controllers\Api\v2\ChatController::class, 'messages'])->middleware(['auth:sanctum', 'ptm.can:messages.use']);
 
 Route::get('student-attendance', [\App\Http\Controllers\Api\v2\StudentController::class, 'studentAttendance'])->middleware('auth:sanctum');
 
@@ -305,6 +306,7 @@ Route::group(['prefix' => 'teacher'], function () {
         Route::get('get-profile-details', [TeacherApiController::class, 'getProfileDetails']);
 
         Route::post('class/create', [ApiController::class, 'createClass'])->middleware('ptm.can:classes.manage');
+        Route::post('class/update', [ApiController::class, 'updateClass'])->middleware('ptm.can:classes.manage');
         Route::post('school-sections', [\App\Http\Controllers\Api\v2\SchoolController::class, 'schoolSection']);
         Route::post('subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'create'])->middleware('ptm.can:classes.manage');
         Route::post('assign/subject', [\App\Http\Controllers\Api\v2\SubjectController::class,'assign'])->middleware('ptm.can:classes.manage');

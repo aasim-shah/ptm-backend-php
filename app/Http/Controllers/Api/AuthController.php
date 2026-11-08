@@ -43,7 +43,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
             $user = $request->user();
@@ -141,7 +141,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
             $otp= Utility::getOtp();
             $gender = strtolower(trim((string) $request->input('gender'))) ?: null;
@@ -271,7 +271,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
 
 
@@ -346,7 +346,7 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 400,
                 'message' => $errorMessage,
-            ], 401);
+            ], 422);
         }
         // Parents and teachers join a school here. Staff and admins ask for access through
         // POST /auth/role-requests instead.
@@ -447,7 +447,7 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 400,
                     'message' => $errorMessage,
-                ], 401);
+                ], 422);
             }
             $image = $request->file('image');
             $file_path = null;
