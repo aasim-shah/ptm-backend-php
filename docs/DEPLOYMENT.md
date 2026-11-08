@@ -207,3 +207,19 @@ Before the change, a backup was written to `/root/ptm-deploy-backups/20261102T19
 The server's `.env.production` has no `TRAIL`, `TRAIL_DAYS`, `TRAIL_CALL_COUNT` or `PREMIUM_CALL_COUNT`, which had made trial creation fail on registration (`call_count cannot be null`). The config now defaults them to 60, 5, 5 and 100; set real plan values in `.env.production` when they are decided.
 
 Post-deploy checks: app, worker and scheduler report healthy; `workspace:health` is healthy; `workspace:prune-exports` is scheduled hourly; public `GET /login` is HTTP 200 and `GET /.env` is HTTP 404; no new errors in the Laravel log; Postiz still responds. Locally, 102 tests passed.
+
+## 15. Admin panel QA report fixes — 8 November 2026
+
+Deployed branch `admin-dashboards` at `757d3de` (the fixes for the 3 November QA report), merged with `origin/main` (`d6a27ae`, report cards), to the active `/root/ptm-candidate` stack on loopback port 8091. The server was already running `d6a27ae` and the temporary `82f1242` (subscription check disabled for testing); neither touches the files in this deploy, and both stay in place. Before copying, the server copies of the 91 changed files were checked: application files matched `0b980aa` exactly; only `tests/` differed and `docs/` is not on the server. The 88 application files were copied with rsync, and the retired `workspace/administration` and `workspace/people` views were removed. `docker-compose.prod.yml` and the environment files were not changed.
+
+Before the change, a backup was written to `/root/ptm-deploy-backups/20261108T094751Z-qa-report-757d3de`: the `ptm` database dump, the environment and Compose files, the source tarball and the rollback image id (also tagged `ptm-backend:before-qa-report`). The image was rebuilt with `WITH_GRPC=0` (`sha256:e1e73c201dcd…`) and the containers recreated with `up -d`. Build log: `/root/ptm-deploy-backups/build-757d3de.log`.
+
+The additive migration `2026_11_08_000001_close_admin_panel_qa_gaps` ran on start. It adds school market and time zone, district status and time zone, scheduled posts, `workspace_markets` (US and UK), `workspace_settings` and `workspace_imports`, and links each web district to the mobile app's `districts` table (`app_district_id`). All 14 schools received a market from their district or country.
+
+The Dockerfile now also sets `ServerTokens Prod` in Debian's `security.conf`, which loads after `app.conf`; the response header is now `Server: Apache` with no version.
+
+Behaviour changes: with `REQUIRE_ADMIN_MFA=true` (already set) administrators can no longer skip two-step sign-in, even though `REVIEW_ALLOW_MFA_SKIP=true` is still in `.env.production`. The classic admin panel redirects to the dashboard; set `LEGACY_ADMIN_ENABLED=true` to reopen it temporarily. Role requests moved to `/dashboard/role-requests`. The scheduler now runs `workspace:publish-scheduled` every minute and `workspace:apply-retention` daily.
+
+Post-deploy checks: app, worker and scheduler healthy; `workspace:health` healthy; 28 dashboard routes registered; `GET /login` 200, `GET /.env` 404, `/email-settings` redirects; Content-Security-Policy present; no new errors in the logs; Postiz still responds. All 26 admin pages rendered HTTP 200 for the Super Admin review account through the application kernel. Locally, 120 tests passed.
+
+The review memberships for `staff@`, `school_admin@`, `district_admin@` and `sub_super_admin@workspace.test` expired on 27–28 October (the provisioning script gave them 7 days), so those accounts have no workspace on the server until their `ends_at` is extended. This blocks QA item B7.
