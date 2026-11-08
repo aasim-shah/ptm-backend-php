@@ -604,7 +604,7 @@ class TeacherController extends Controller
             'reports.*.subject_id' => 'nullable|numeric',
             'session_year_id' => 'required|numeric',
             'reports.*.student_id' => 'required',
-            'reports.*.points' => 'nullable|numeric',
+            'reports.*.points' => 'nullable|numeric|between:0,100',
             'reports.*.review' => 'nullable',
             'reports.*.missing_cause' => 'nullable',
             'reports.*.grade' => 'nullable'
@@ -721,7 +721,8 @@ class TeacherController extends Controller
                     "id" => Utility::getUUID(),
                     "quarter_id" => $request->quarter_id,
                     "class_id" => $class_id,
-                    "grade" => $report['grade'] ?? null,
+                    // The server derives the grade so every app version agrees.
+                    "grade" => self::gradeForPoints($report['points'] ?? null) ?? ($report['grade'] ?? null),
                     "session_year" => $sessionYear->name,
                     "session_year_id" => $sessionYear->id,
                     "subject_id" => $subjectId,
@@ -873,5 +874,22 @@ class TeacherController extends Controller
                 $query->where('class_id', $classId);
             })
             ->pluck('subject_id')->map(fn ($id) => (int) $id)->unique()->values();
+    }
+
+    /**
+     * The grading scale shared with the app (Utils.gradeForMarks):
+     * A >= 75, B 61-74, C 51-60, S 41-50, F <= 40. Null when there are no points.
+     */
+    public static function gradeForPoints($points): ?string
+    {
+        if ($points === null || $points === '' || !is_numeric($points)) {
+            return null;
+        }
+        $p = (float) $points;
+        if ($p >= 75) return 'A';
+        if ($p > 60) return 'B';
+        if ($p > 50) return 'C';
+        if ($p > 40) return 'S';
+        return 'F';
     }
 }

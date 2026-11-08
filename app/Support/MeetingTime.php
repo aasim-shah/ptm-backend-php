@@ -24,7 +24,13 @@ class MeetingTime
 
     public static function normalize($time): string
     {
-        return trim(str_replace(["\u{202F}", "\u{00A0}"], ' ', (string) $time));
+        $time = trim(str_replace(["\u{202F}", "\u{00A0}"], ' ', (string) $time));
+        // A full date-time ("2026-11-08 00:05:00") carries its own date; keep only
+        // the time so it is combined with meeting_date instead of failing to parse.
+        if (preg_match('/(\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp][Mm])?)$/', $time, $m) && strlen($m[1]) < strlen($time)) {
+            return trim($m[1]);
+        }
+        return $time;
     }
 
     /** True when meeting_date + meeting_time is more than 5 minutes ago in the caller's timezone. */
@@ -49,7 +55,8 @@ class MeetingTime
         if (is_string($named) && in_array($named, timezone_identifiers_list(), true)) {
             return $named;
         }
-        foreach ([$request?->input('timezone_offset'), $user?->timezone_offset] as $offset) {
+        // The app sends X-Timezone-Offset (seconds east of UTC) on every request.
+        foreach ([$request?->input('timezone_offset'), $request?->header('X-Timezone-Offset'), $user?->timezone_offset] as $offset) {
             if (is_numeric($offset) && abs((int) $offset) <= 14 * 3600) {
                 $minutes = intdiv((int) $offset, 60);
                 return sprintf('%s%02d:%02d', $minutes < 0 ? '-' : '+', intdiv(abs($minutes), 60), abs($minutes) % 60);

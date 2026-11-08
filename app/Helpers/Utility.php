@@ -13,24 +13,28 @@ class Utility
             $attr = $utc+$current_time_zone;
             return date("Y-m-d H:i:s", $attr);
     }
+    /** Sends an HTML email through SendGrid. Returns true only when SendGrid accepted it. */
     public static function sendEmail($view,$subject,$toMail){
-        $email = new \SendGrid\Mail\Mail();
-        $email->setFrom(config('environment.MAIL_FROM_ADDRESS'), config('environment.MAIL_FROM_NAME'));
-        $email->setSubject($subject);
-        $email->addTo($toMail, "Parent Teacher");
-        $email->addContent("text/html",$view);
-        $sendgrid = new \SendGrid(config('environment.MAIL_PASSWORD'));
         try {
-            $sendgrid->send($email);
+            // Building the message can throw too (e.g. MAIL_FROM_ADDRESS not set).
+            $email = new \SendGrid\Mail\Mail();
+            $email->setFrom(config('environment.MAIL_FROM_ADDRESS'), config('environment.MAIL_FROM_NAME'));
+            $email->setSubject($subject);
+            $email->addTo($toMail, "Parent Teacher");
+            $email->addContent("text/html",$view);
+            $sendgrid = new \SendGrid(config('environment.MAIL_PASSWORD'));
+            $response = $sendgrid->send($email);
+            // SendGrid does not throw on 4xx/5xx (bad key, unverified sender):
+            // check the status so callers can tell the user it failed.
+            if ($response->statusCode() >= 400) {
+                Log::error('email to '.$toMail.' failed: '.$response->statusCode().' '.$response->body());
+                return false;
+            }
             Log::info('email sent to '.$toMail);
             return true;
         } catch (\Exception $e) {
             Log::error($e);
-            return response()->json([
-                'status' => 400,
-                'message' => $e->getMessage(),
-                'data' => []
-            ], 200);
+            return false;
         }
     }
     public static function getUUID()

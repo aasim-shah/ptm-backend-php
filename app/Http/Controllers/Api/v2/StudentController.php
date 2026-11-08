@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\v2;
 
+use Carbon\Carbon;
+
 use App\Helpers\Utility;
 use App\Models\Attendance;
 use App\Models\ClassSchool;
@@ -968,8 +970,9 @@ class StudentController
             return Access::forbidden();
         }
         $subject_id = $request->subject_id;
-        $year = $request->year;
-        $month = $request->month;
+        // Without year/month the query matched nothing; default to the current month.
+        $year = $request->year ?: Carbon::now()->year;
+        $month = $request->month ?: Carbon::now()->month;
 
         if($subject_id){
             $attendance = Attendance::where('student_id',$student_id)
@@ -990,7 +993,7 @@ class StudentController
 
         $response = array(
             'error' => false,
-            'message' => 'Student\'s teachers fetched Successfully.',
+            'message' => 'Student attendance fetched successfully.',
             'data' => $attendance,
             'code' => 200,
         );

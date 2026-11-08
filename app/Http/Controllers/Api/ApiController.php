@@ -45,6 +45,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use App\Models\Holiday;
 use App\Models\SessionYear;
 use App\Models\Slider;
@@ -684,7 +686,10 @@ class ApiController extends Controller
             $validateUser = Validator::make($request->all(),
                 [
                     'title' => 'required',
-                    'student_parent_ids' => 'nullable',
+                    // A list of {parent_id, student_id}; anything else was an HTTP 500.
+                    'student_parent_ids' => 'nullable|array',
+                    'student_parent_ids.*' => 'array',
+                    'student_parent_ids.*.parent_id' => 'required|integer',
                     'meeting_date' => 'required|after:yesterday',
                     'meeting_time' => 'required',
                     'meeting_end_time' => 'required'
@@ -754,7 +759,7 @@ class ApiController extends Controller
                 );
                 return response()->json($response);
             }
-            $student_parent_ids = $request->student_parent_ids;
+            $student_parent_ids = $request->student_parent_ids ?? [];
             if (sizeof($student_parent_ids) == 0) {
                 $student_parent_ids[0]['parent_id'] = $user->id;
                 $student_parent_ids[0]['student_id'] = null;
@@ -941,7 +946,10 @@ class ApiController extends Controller
             $validateUser = Validator::make($request->all(),
                 [
                     'title' => 'required',
-                    'student_parent_ids' => 'nullable',
+                    // A list of {parent_id, student_id}; anything else was an HTTP 500.
+                    'student_parent_ids' => 'nullable|array',
+                    'student_parent_ids.*' => 'array',
+                    'student_parent_ids.*.parent_id' => 'required|integer',
                     'meeting_date' => 'required|after:yesterday',
                     'meeting_time' => 'required',
                     'meeting_end_time' => 'required'
@@ -1625,7 +1633,12 @@ class ApiController extends Controller
                         'otp' => $otp
                     ];
                     $view = view('emails.pincode', compact('details'))->render();
-                    Utility::sendEmail($view,'Email Verification OTP',$request->email);
+                    // The code is valid for 15 minutes and for 5 attempts.
+                    Cache::put(self::otpIssuedKey($user->email), true, now()->addMinutes(15));
+                    Cache::forget(self::otpAttemptsKey($user->email));
+                    if (Utility::sendEmail($view,'Email Verification OTP',$request->email) !== true) {
+                        return response(["status" => 503, "message" => "We could not send the email right now. Please try again later."], 503);
+                    }
                     return response(["status" => 200, "message" => "OTP sent successfully"]);
                 } else {
                     return response(["status" => 400, 'message' => 'Invalid details provided'],400);
@@ -1645,60 +1658,120 @@ class ApiController extends Controller
         }
     }
 
-    protected function verifyOtp(Request $request)
+    private static function otpIssuedKey(string $email): string
     {
-
-        $user = User::where([['email', '=', $request->email], ['pincode', '=', $request->otp]])->first();
-        if ($user) {
-            $user->pincode = null;
-            $user->email_verified_at = Carbon::now();
-            $user->save();
-            return response(["status" => 200, "message" => "Success"]);
-        } else {
-            return response(["status" => 400, 'message' => 'Invalid details provided'],400);
-        }
+        return 'pwd_otp_issued:' . strtolower($email);
     }
 
+    private static function otpAttemptsKey(string $email): string
+    {
+        return 'pwd_otp_attempts:' . strtolower($email);
+    }
+
+    /**
+     * Checks the emailed code. On success it returns a one-time `reset_token`
+     * (valid 15 minutes) that set-password requires. A code expires after 15
+     * minutes and after 5 wrong attempts, so it cannot be guessed.
+     */
+    protected function verifyOtp(Request $request)
+    {
+        $email = (string) $request->email;
+        $invalid = response(["status" => 400, 'message' => 'Invalid or expired code. Please request a new code.'], 400);
+        if ($email === '' || !$request->otp) {
+            return $invalid;
+        }
+        $user = User::where('email', $email)->whereNotNull('pincode')->first();
+        if (!$user || !Cache::has(self::otpIssuedKey($email))) {
+            return $invalid;
+        }
+        if ((string) $user->pincode !== (string) $request->otp) {
+            $attempts = Cache::increment(self::otpAttemptsKey($email));
+            if ($attempts >= 5) {
+                $user->pincode = null;
+                $user->save();
+                Cache::forget(self::otpIssuedKey($email));
+                Cache::forget(self::otpAttemptsKey($email));
+            }
+            return $invalid;
+        }
+
+        $user->pincode = null;
+        $user->email_verified_at = $user->email_verified_at ?? Carbon::now();
+        $user->save();
+        Cache::forget(self::otpIssuedKey($email));
+        Cache::forget(self::otpAttemptsKey($email));
+
+        $token = Str::random(64);
+        DB::table('password_resets')->where('email', $user->email)->delete();
+        DB::table('password_resets')->insert([
+            'email' => $user->email,
+            'token' => Hash::make($token),
+            'created_at' => Carbon::now(),
+        ]);
+        return response(["status" => 200, "message" => "Success", "reset_token" => $token]);
+    }
+
+    /**
+     * Sets a new password. Requires the `reset_token` from verify-otp; without
+     * it anyone could change any account's password from its email address.
+     */
     protected function changePasswordAfterOtp(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required',
-            'new_password' => 'required|between:6,12',
+            'email' => 'required|email',
+            'reset_token' => 'required|string',
+            'new_password' => 'required|string|min:6|max:128',
             'new_confirm_password' => 'same:new_password',
+        ], [
+            'reset_token.required' => 'Please verify the code sent to your email first.',
         ]);
         if ($validator->fails()) {
-            $response = array(
+            return response()->json([
                 'error' => true,
                 'message' => $validator->errors()->first(),
+                'code' => 422,
+            ], 422);
+        }
+        $row = DB::table('password_resets')->where('email', $request->email)->first();
+        $valid = $row
+            && $row->created_at
+            && Carbon::parse($row->created_at)->gt(Carbon::now()->subMinutes(15))
+            && Hash::check($request->reset_token, $row->token);
+        $user = $valid ? User::where('email', $request->email)->first() : null;
+        if (!$user) {
+            return response()->json([
+                'error' => true,
+                'message' => 'This reset link has expired. Please request a new code.',
                 'code' => 400,
-            );
-            return response()->json($response,400);
+            ], 400);
         }
         try {
-            $user = User::where('email', $request->email)->first();
             $user->update(['password' => Hash::make($request->new_password)]);
-            $response = array(
+            DB::table('password_resets')->where('email', $user->email)->delete();
+            // Sign out every existing session of the account.
+            if (method_exists($user, 'tokens')) {
+                $user->tokens()->delete();
+            }
+            return response()->json([
                 'error' => false,
                 'message' => "Password Changed successfully.",
                 'code' => 200,
-            );
-            return response()->json($response);
+            ]);
         } catch (\Exception $e) {
-            $response = array(
+            Log::error($e->getMessage(), ['exception' => $e]);
+            return response()->json([
                 'error' => true,
                 'message' => trans('error_occurred'),
                 'code' => 400,
-            );
-            return response()->json($response,400);
+            ], 400);
         }
-
     }
 
     protected function changePassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'current_password' => 'nullable',
-            'new_password' => 'required|between:6,12',
+            'new_password' => 'required|string|min:6|max:128',
             'new_confirm_password' => 'same:new_password',
         ]);
         if ($validator->fails()) {
