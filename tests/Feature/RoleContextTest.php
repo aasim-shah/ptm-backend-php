@@ -458,7 +458,8 @@ class RoleContextTest extends TestCase
         $staff = $this->makeUser('staff', ['first_name' => 'Pat']);
         $request = $this->context($staff, 'staff', $school, 'pending');
 
-        $this->actingAs($boss)->get('/role-requests')->assertOk()->assertSee('Pat')->assertSee('Oak Primary');
+        $this->actingAs($boss)->get('/role-requests')->assertRedirect(route('workspace.role-requests'));
+        $this->actingAs($boss)->get('/dashboard/role-requests?context=platform')->assertOk()->assertSee('Pat')->assertSee('Oak Primary');
         $this->actingAs($boss)->post("/role-requests/{$request->id}/approve")->assertRedirect();
         $this->assertSame('active', $request->fresh()->status);
 

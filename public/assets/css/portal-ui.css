@@ -131,8 +131,10 @@
 .ws-caption { margin:24px 12px 11px; font-size:9px; }
 .ws-brand { font-size:21px; padding-bottom:22px; }
 .ws-sidebar-foot { line-height:1.7; }
+.ws-sidebar-foot .ws-role-badge { display:flex; align-items:center; gap:7px; margin-bottom:10px; padding:7px 10px; border-radius:9px; background:#ffffff14; color:#ffd36b; font-size:12px; font-weight:700; }
 .ws-topbar { padding:15px 36px; min-height:82px; background:#ffffffed; }
-.ws-context label { font-size:9px; color:#7c8ba3; letter-spacing:1px; margin-bottom:4px; display:block; }
+.ws-context label, .ws-context-label { font-size:9px; color:#7c8ba3; letter-spacing:1px; margin-bottom:4px; display:block; text-transform:uppercase; }
+.ws-context-current { display:block; color:#3a5071; font-size:14px; font-weight:600; }
 .ws-context select { background:#f6f8fc; border:1px solid #e4eaf4; border-radius:10px; padding:9px 12px; color:#3a5071; }
 .ws-account { gap:14px; }
 .ws-account-name { display:flex; align-items:center; gap:9px; font-size:12px; color:#425672!important; background:none!important; padding:0!important; }
@@ -212,3 +214,96 @@ select.form-control { padding-right:30px; }
 .ws-people-grid > .ws-card .ws-form-actions { margin-top:auto; }
 /* Side panels keep dates and contact pickers comfortably readable. */
 .ws-grid > .ws-card .ws-form-grid { grid-template-columns:minmax(0,1fr); }
+
+/* Administrative panels (Super, Sub-Super, District, School): shared admin menu, six KPI tiles,
+   video centre, charts, attention list, analytics and reports. */
+.ws-sidebar { overflow-y:auto; scrollbar-width:thin; }
+.ws-admin-nav a { padding-top:8px!important; padding-bottom:8px!important; }
+.ws-stat:nth-child(5) { --tile:#b85c00; --tile-light:#ffad42; --tile-soft:#ffecd2; border-color:#ffd9a8; background:linear-gradient(120deg,#ffe9cc,#fff5e8); }
+.ws-stat:nth-child(6) { --tile:#007e90; --tile-light:#2fd0e0; --tile-soft:#d3f5f8; border-color:#a9e5ec; background:linear-gradient(120deg,#d0f3f7,#ebfbfd); }
+:is([data-role="super_admin"],[data-role="sub_super_admin"],[data-role="district_admin"],[data-role="school_admin"]) .ws-stats { grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px; }
+:is([data-role="super_admin"],[data-role="sub_super_admin"],[data-role="district_admin"],[data-role="school_admin"]) .ws-stat { min-height:112px; gap:11px; padding:16px 13px; }
+:is([data-role="super_admin"],[data-role="sub_super_admin"],[data-role="district_admin"],[data-role="school_admin"]) .ws-stat > .ws-stat-icon { flex-basis:44px; width:44px; height:54px; font-size:21px; border-radius:13px; }
+:is([data-role="super_admin"],[data-role="sub_super_admin"],[data-role="district_admin"],[data-role="school_admin"]) .ws-stat strong { font-size:26px; }
+
+.ws-video-center { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto; align-items:center; gap:22px; background:linear-gradient(120deg,#eef5ff,#f6f0ff); }
+.ws-video-center__intro { display:flex; align-items:center; gap:14px; }
+.ws-video-center__intro h2 { margin:0; }
+.ws-video-center__intro p { margin:4px 0 0; font-size:12px; color:var(--ui-muted); }
+.ws-video-center__stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0; }
+.ws-video-center__stats div { background:#fff; border:1px solid var(--ui-line); border-radius:12px; padding:10px 12px; }
+.ws-video-center__stats dt { font-size:10px; font-weight:600; color:var(--ui-muted); }
+.ws-video-center__stats dd { margin:2px 0 0; font-size:20px; font-weight:750; color:#102557; }
+.ws-video-center__actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.ws-video-center__actions .ws-btn .fa { margin-right:2px; }
+
+.ws-chart-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; }
+.ws-chart-grid--two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.ws-chart-grid > .ws-card { min-width:0; margin-bottom:0; }
+.ws-chart-grid + * { margin-top:24px; }
+.ws-chart-card h2 small { font-size:11px; font-weight:500; color:var(--ui-muted); margin-left:4px; }
+.ws-chart-card .ws-meta { margin:2px 0 10px; }
+.ws-chart { position:relative; height:220px; }
+.ws-chart--tall { height:260px; }
+
+.ws-attention-icon { color:#d34763; }
+.ws-attention-row { display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid #eef2f8; color:inherit!important; text-decoration:none!important; }
+.ws-attention-row:last-child { border-bottom:0; }
+.ws-attention-row:hover { background:#f7faff; }
+.ws-attention-row__icon { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:10px; background:var(--ui-soft); color:var(--ui-accent); }
+.ws-attention-row strong { display:block; font-size:13px; }
+.ws-attention-row small { display:block; font-size:11px; color:var(--ui-muted); }
+.ws-grow { flex:1; min-width:0; }
+.ws-count { min-width:30px; text-align:center; font-weight:700; font-size:12px; padding:3px 8px; border-radius:20px; background:#eef2f8; color:#536783; }
+.ws-count--alert { background:#ffe6ec; color:#b63957; }
+.ws-status { font-size:10px; font-weight:650; padding:4px 9px; border-radius:20px; background:#e4f6ed; color:#1c7956; white-space:nowrap; }
+.ws-status--pending, .ws-status--unverified { background:#fff2dd; color:#9a5a06; }
+.ws-status--disabled, .ws-status--revoked, .ws-status--inactive, .ws-status--failed, .ws-status--cancelled, .ws-status--expired { background:#eef0f5; color:#6a768c; }
+
+.ws-filter-card { padding:18px 22px; }
+.ws-filter-form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px; max-width:none; margin-top:0; }
+.ws-filter-form label { flex:1 1 160px; }
+.ws-filter-form .ws-form-actions { margin:0; padding:0; }
+.ws-quick-ranges { margin:12px 0 0; font-size:12px; color:var(--ui-muted); display:flex; flex-wrap:wrap; gap:6px 14px; }
+.ws-metric-row { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px; margin:0 0 24px; }
+.ws-metric-row div { background:#fff; border:1px solid var(--ui-line); border-radius:14px; padding:13px 15px; }
+.ws-metric-row dt { font-size:11px; color:var(--ui-muted); font-weight:600; }
+.ws-metric-row dd { margin:3px 0 0; font-size:22px; font-weight:750; color:#102557; }
+
+.ws-report-types { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; margin-bottom:22px; }
+.ws-report-type { display:block; background:#fff; border:1px solid var(--ui-line); border-radius:14px; padding:14px 16px; color:inherit!important; text-decoration:none!important; }
+.ws-report-type strong { display:block; font-size:13px; margin-bottom:3px; }
+.ws-report-type span { font-size:11px; color:var(--ui-muted); line-height:1.5; }
+.ws-report-type:hover { border-color:#b8cce9; }
+.ws-report-type[aria-current] { border-color:var(--ui-accent); background:var(--ui-soft); box-shadow:0 0 0 2px color-mix(in srgb,var(--ui-accent) 20%,transparent); }
+.ws-export-actions { display:flex; flex-wrap:wrap; gap:8px; }
+
+@media(max-width:1300px) {
+    :is([data-role="super_admin"],[data-role="sub_super_admin"],[data-role="district_admin"],[data-role="school_admin"]) .ws-stats { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .ws-video-center { grid-template-columns:1fr; }
+    .ws-video-center__actions { justify-content:flex-start; }
+    .ws-chart-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .ws-metric-row { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media(max-width:800px) {
+    :is([data-role="super_admin"],[data-role="sub_super_admin"],[data-role="district_admin"],[data-role="school_admin"]) .ws-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .ws-chart-grid, .ws-chart-grid--two { grid-template-columns:minmax(0,1fr); }
+    .ws-chart-grid > .ws-card { margin-bottom:0; }
+    .ws-video-center__stats, .ws-metric-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .ws-sidebar { overflow:visible; }
+}
+@media print {
+    .ws-sidebar, .ws-topbar, .ws-mobile-nav, .ws-footer, .ws-report-types, .no-print, .ws-skip { display:none!important; }
+    .ws-shell { margin:0!important; }
+    .ws-main { padding:0!important; max-width:none; }
+    .ws-card { box-shadow:none; border:0; padding:0; }
+    .ws-table-wrap { overflow:visible; border:0; }
+}
+.ws-grid--even { grid-template-columns:repeat(2,minmax(0,1fr)); }
+@media(max-width:1000px) { .ws-grid--even { grid-template-columns:minmax(0,1fr); } }
+/* On phones the first sidebar menu normally duplicates the bottom bar; the admin menu does not, so keep it. */
+@media(max-width:800px) { .ws-sidebar > nav.ws-admin-nav { display:flex; } }
+.ws-internal-note { background:#fff8e8; border-color:#f3dca8; }
+.ws-ticket-facts { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin:0 0 18px; font-size:12px; }
+.ws-ticket-facts dt { color:var(--ui-muted); font-weight:600; }
+.ws-ticket-facts dd { margin:0; }

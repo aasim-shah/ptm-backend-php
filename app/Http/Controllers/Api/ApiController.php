@@ -910,17 +910,19 @@ class ApiController extends Controller
         Log::info($request);
 
        $user = $request->user();
+       // TODO(testing): query kept live because $isActive->call_count is used for the participant cap below.
        $isActive = UserSubscription::where('user_id',$user->id)
             ->where('status',"ACTIVE")->where('remaining_time','!=','0')->first();
-       if(!$isActive){
-           $response = [
-               'error' => true,
-               'message' => "No Active Subscription",
-               'data' => UserSubscription::where('user_id',$user->id)
-                   ->where('status',"ACTIVE")->first()
-           ];
-           return response()->json($response,400);
-       }
+       // TODO(testing): subscription check disabled so free users can test meetings/video calls. Restore before release.
+       // if(!$isActive){
+       //     $response = [
+       //         'error' => true,
+       //         'message' => "No Active Subscription",
+       //         'data' => UserSubscription::where('user_id',$user->id)
+       //             ->where('status',"ACTIVE")->first()
+       //     ];
+       //     return response()->json($response,400);
+       // }
 
         try {
 
@@ -998,7 +1000,9 @@ class ApiController extends Controller
                 $request->teacher_id = $user->id;
             }
 
-            if(in_array($actingRole, UserRole::INSTITUTION_ROLES, true) && $isActive->call_count <= sizeof($student_parent_ids)){
+            // TODO(testing): subscription check disabled so free users can test meetings/video calls. Restore before release.
+            // Original: if(in_array($actingRole, UserRole::INSTITUTION_ROLES, true) && $isActive->call_count <= sizeof($student_parent_ids)){
+            if(in_array($actingRole, UserRole::INSTITUTION_ROLES, true) && $isActive && $isActive->call_count <= sizeof($student_parent_ids)){
                 $response = array(
                     'error' => true,
                     'message' => "Participant count exceeded",

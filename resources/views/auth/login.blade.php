@@ -55,7 +55,7 @@
                     @endif
                 </div>
                 <div class="lm-auth__password">
-                    <input id="password" type="password" class="form-control form-control-lg" name="password" required autocomplete="current-password" placeholder="••••••••">
+                    <input id="password" type="password" class="form-control form-control-lg" name="password" required autocomplete="current-password" placeholder="Enter your password">
                     <button type="button" class="lm-auth__eye" aria-label="Show password">
                         <i class="fa fa-eye-slash" id="togglePassword"></i>
                     </button>

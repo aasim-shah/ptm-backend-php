@@ -28,6 +28,8 @@ class RoleRequestController extends Controller
 
     public function index(Request $request)
     {
+        // With the classic panel retired, the web dashboard hosts this page.
+        if (!config('workspace.legacy_admin_enabled')) { return redirect()->route('workspace.role-requests', $request->only('status')); }
         $status = $request->get('status', 'pending');
         $query = $this->contexts->administrableQuery($request->user())
             ->with('user:id,first_name,last_name,email,type,title')
@@ -53,17 +55,17 @@ class RoleRequestController extends Controller
         $context = $this->authorizedContext($request, $id);
         if ($action === 'end') {
             $this->contexts->end($request->user(), $context);
-            return back()->with('success', 'Access ended.');
+            return back()->with(['success' => 'Access ended.', 'workspace_success' => 'Access ended.']);
         }
         if (!isset(self::ACTIONS[$action])) {
             abort(404);
         }
         [$from, $to] = self::ACTIONS[$action];
         if (!in_array($context->status, $from, true)) {
-            return back()->withErrors(['message' => "Can't {$action} a {$context->status} request."]);
+            return back()->withErrors(['message' => "This request is already {$context->status}, so it cannot be {$action}d."]);
         }
         $this->contexts->decide($request->user(), $context, $to);
-        return back()->with('success', 'Request updated.');
+        return back()->with(['success' => 'Request updated.', 'workspace_success' => ['approve' => 'Request approved.', 'reject' => 'Request rejected.', 'suspend' => 'Access suspended.', 'reactivate' => 'Access reactivated.'][$action]]);
     }
 
     public function permissions(Request $request, $id)
@@ -73,7 +75,7 @@ class RoleRequestController extends Controller
         $all = DB::table('context_permissions')->pluck('key');
         $this->contexts->setPermissions($request->user(), $context,
             $all->mapWithKeys(fn ($key) => [$key => in_array($key, $selected, true)])->all());
-        return back()->with('success', 'Permissions saved.');
+        return back()->with(['success' => 'Permissions saved.', 'workspace_success' => 'Permissions saved.']);
     }
 
     private function authorizedContext(Request $request, $id): UserRole

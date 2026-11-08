@@ -35,6 +35,8 @@ RUN IPE_PROCESSOR_COUNT=${IPE_PROCESSOR_COUNT} install-php-extensions pdo_mysql 
     && echo 'ServerName localhost' > /etc/apache2/conf-enabled/servername.conf
 
 COPY docker/php.ini /usr/local/etc/php/conf.d/app.ini
+# Debian's security.conf loads after app.conf and would reset the banner to "Apache/x.y (Debian)" (QA D4).
+RUN sed -ri 's/^ServerTokens .*/ServerTokens Prod/; s/^ServerSignature .*/ServerSignature Off/' /etc/apache2/conf-available/security.conf
 
 RUN apt-get update && apt-get install -y --no-install-recommends clamav clamav-freshclam && rm -rf /var/lib/apt/lists/*
 

@@ -41,6 +41,12 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             //
         });
+        // A rejected admin form returns to the page with a readable message instead of a bare error page.
+        $this->renderable(function (\Symfony\Component\HttpKernel\Exception\HttpException $e, $request) {
+            if ($request->expectsJson() || $request->isMethod('GET') || !in_array($e->getStatusCode(), [409, 422], true)) { return null; }
+            if (!Str::startsWith($request->path(), ['workspace/', 'security'])) { return null; }
+            return back()->withInput($request->except($this->dontFlash))->withErrors(['action' => $e->getMessage() ?: 'This change could not be saved.']);
+        });
     }
     protected function unauthenticated($request, AuthenticationException $exception)
     {

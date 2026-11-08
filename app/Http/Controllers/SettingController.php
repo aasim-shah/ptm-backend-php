@@ -226,20 +226,22 @@ class SettingController extends Controller
             'mail_host' => 'required',
             'mail_port' => 'required',
             'mail_username' => 'required',
-            'mail_password' => 'required',
+            // The saved password is never sent back to the browser; leave it empty to keep it.
+            'mail_password' => 'nullable|string|max:255',
             'mail_encryption' => 'required',
             'mail_send_from' => 'required|email',
         ]);
 
+        // The password lives only in the server environment, never in the settings table.
         $settings = [
             'mail_mailer',
             'mail_host',
             'mail_port',
             'mail_username',
-            'mail_password',
             'mail_encryption',
             'mail_send_from',
         ];
+        Settings::where('type', 'mail_password')->delete();
 
         try {
             foreach ($settings as $row) {
@@ -260,16 +262,16 @@ class SettingController extends Controller
                     ['type' => 'email_configration_verification', 'message' => 0]
                 );
             }
-            $env_update = changeEnv([
+            $env = [
                 'MAIL_MAILER' => $request->mail_mailer,
                 'MAIL_HOST' => $request->mail_host,
                 'MAIL_PORT' => $request->mail_port,
                 'MAIL_USERNAME' => $request->mail_username,
-                'MAIL_PASSWORD' => $request->mail_password,
                 'MAIL_ENCRYPTION' => $request->mail_encryption,
                 'MAIL_FROM_ADDRESS' => $request->mail_send_from
-
-            ]);
+            ];
+            if (filled($request->mail_password)) { $env['MAIL_PASSWORD'] = $request->mail_password; }
+            $env_update = changeEnv($env);
             if ($env_update) {
                 $response = array(
                     'error' => false,

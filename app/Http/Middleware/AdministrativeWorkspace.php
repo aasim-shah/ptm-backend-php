@@ -13,7 +13,9 @@ class AdministrativeWorkspace
         abort_unless($contexts, 403, 'Use the mobile app. Web access is limited to administrators and explicitly authorized staff.');
         $id = $request->input('context', $request->session()->get('workspace_context'));
         abort_if($id !== null && !is_string($id), 422, 'Invalid workspace context.');
-        if ($id !== null) { abort_unless(collect($contexts)->contains('id', $id), 403, 'This administrative workspace is unavailable.'); }
+        if ($id !== null && str_starts_with($id, 'platform:')) {
+            abort_unless(app(WorkspaceAccess::class)->supportContext($request->user(), $id), 403, 'This administrative workspace is unavailable.');
+        } elseif ($id !== null) { abort_unless(collect($contexts)->contains('id', $id), 403, 'This administrative workspace is unavailable.'); }
         else { $request->merge(['context' => $contexts[0]['id']]); }
         return $next($request);
     }
