@@ -767,6 +767,22 @@ class StudentController
 //        })->where('student_id',$student_id)
 //             ->get();
 
+        // Without a quarter, show the most recently published one for the student (and session year).
+        if (!$quarter_id) {
+            $quarter_id = StudentQuarter::where('student_id', $student_id)
+                ->when($session_year, function ($query) use ($session_year) {
+                    $query->where('session_year_id', $session_year);
+                })
+                ->whereHas('quarter.studentReportCards', function ($query) use ($student_id, $session_year) {
+                    $query->where('student_id', $student_id);
+                    if ($session_year) {
+                        $query->where('session_year_id', $session_year);
+                    }
+                })
+                ->orderByDesc('created_at')
+                ->value('quarter_id');
+        }
+
         $published = StudentQuarter::where('student_id',$student_id)
             ->where(function ($query) use ($quarter_id,$session_year){
                 if($quarter_id){

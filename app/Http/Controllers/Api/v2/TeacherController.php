@@ -16,7 +16,7 @@ use App\Models\SessionYear;
 use App\Models\StudentQuarter;
 use App\Models\StudentReportCards;
 use App\Models\Students;
-use App\Models\Subject;
+use App\Models\SubjectTeacher;
 use App\Models\User;
 use App\Services\NotificationSender;
 use Carbon\Carbon;
@@ -420,6 +420,21 @@ class TeacherController extends Controller
 
     public function addStudentReport(Request $request)
     {
+        return $this->saveStudentReports($request);
+    }
+
+    public function editStudentReport(Request $request)
+    {
+        return $this->saveStudentReports($request);
+    }
+
+    /**
+     * Publishes the class quarter by hand: every student with at least one subject filled in
+     * (points or a missing cause) is published, even if other subjects are still empty.
+     * Running it again only publishes students who were not published before.
+     */
+    public function publishStudentReport(Request $request)
+    {
         if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
             && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
             return Access::forbidden();
@@ -433,239 +448,62 @@ class TeacherController extends Controller
             );
             return response()->json($response);
         }
-        $user = $request->user();
-        $userID = $user->id;
         $validator = Validator::make($request->all(), [
-            'quarter_id' => 'required',
-            'reports.*.grade' => 'nullable',
             'class_id' => 'required|numeric',
-            // The app sends subject_id on each report item; the top-level one is optional.
-            'subject_id' => 'required_without:reports.0.subject_id|nullable|numeric',
-            'reports' => 'required|array',
-            'reports.*.subject_id' => 'nullable|numeric',
+            'quarter_id' => 'required',
             'session_year_id' => 'required|numeric',
-            'reports.*.student_id' => 'required',
-            'reports.*.points' => 'nullable|numeric',
-            'reports.*.review' => 'nullable',
-            'reports.*.missing_cause' => 'nullable'
         ]);
-        $class_id = $request->class_id;
-
-        $classSection = ClassSection::where('class_id', $request->class_id)->first();
-        if (!$classSection) {
-            $response = array(
-                'error' => true,
-                'message' => "Invalid class detected or class is not associate with a section",
-                'data' => null
-            );
-            return response()->json($response);
-        }
-        $subjectIds = collect($request->reports ?? [])
-            ->map(fn ($report) => $report['subject_id'] ?? $request->subject_id)
-            ->push($request->subject_id)->filter()->unique()->values();
-        $isSubject = $subjectIds->isNotEmpty()
-            && Subject::whereIn('id', $subjectIds)->count() === $subjectIds->count();
-        if (!$isSubject) {
-            $response = array(
-                'error' => true,
-                'message' => "Invalid subject detected.",
-                'data' => null
-            );
-            return response()->json($response);
-        }
-        $studentIds = array_column($request->reports, 'student_id');
-        $isClassStudents = User::where('type', 'student')->whereIn('id', $studentIds)
-            ->whereHas('student', function ($query) use ($userID, $class_id) {
-                $query->whereHas('class_section', function ($query) use ($userID, $class_id) {
-                    $query->where('class_teacher_id', $userID);
-                    $query->where('class_id', $class_id);
-                });
-            })->count();
-
-        if (sizeof($studentIds) != $isClassStudents) {
-            $response = array(
-                'error' => true,
-                'message' => "Some of provided students are invalid."
-            );
-            return response()->json($response);
-        }
-
-        $sessionYear = SessionYear::where('id', $request->session_year_id)->first();
         if ($validator->fails()) {
             $response = array(
                 'error' => true,
-                'message' => $validator->errors()->first()
+                'message' => $validator->errors()->first(),
+                'data' => null
             );
             return response()->json($response);
         }
-        $array = array();
-        $allStudents = [];
+
+        $classQuarter = ClassQuarter::where('quarter_id', $request->quarter_id)
+            ->where('session_year_id', $request->session_year_id)
+            ->where('class_id', $request->class_id)
+            ->first();
+        $hasMarks = StudentReportCards::where('class_id', $request->class_id)
+            ->where('quarter_id', $request->quarter_id)
+            ->where('session_year_id', $request->session_year_id)
+            ->where(function ($query) {
+                $query->whereNotNull('points')->orWhereNotNull('missing_cause');
+            })->exists();
+        if (!$classQuarter || !$hasMarks) {
+            $response = array(
+                'error' => true,
+                'message' => "No report marks found for this class and quarter.",
+                'data' => null
+            );
+            return response()->json($response);
+        }
+
         try {
             DB::beginTransaction();
-
-            $classQuarter = ClassQuarter::where('quarter_id',$request->quarter_id)
-                ->where('session_year_id', $sessionYear->id)
-                ->where('class_id', $class_id)
-                ->first();
-            if(!$classQuarter){
-                $classQuarter = new ClassQuarter();
-                $classQuarter->id = Utility::getUUID();
-                $classQuarter->quarter_id = $request->quarter_id;
-                $classQuarter->class_id = $request->class_id;
-                $classQuarter->status = "PENDING";
-                $classQuarter->session_year = $sessionYear->name;
-                $classQuarter->session_year_id = $sessionYear->id;
-                $classQuarter->save();
-                $classQuarter = $classQuarter->refresh();
-            }
-
-            $canPublish = false;
-            foreach ($request->reports as $report) {
-                $deleted =  StudentReportCards::where('class_id', $class_id)
-                    ->where('quarter_id', $request->quarter_id)
-                    ->where('subject_id', $report['subject_id'] ?? $request->subject_id)
-                    ->where('session_year_id', $request->session_year_id)
-                    ->where('student_id', $report['student_id'])
-                    ->delete();
-
-                $array [] = [
-                    "id" => Utility::getUUID(),
-                    "quarter_id" => $request->quarter_id,
-                    "class_id" => $class_id,
-                    "grade" => $report['grade'],
-                    "session_year" => $sessionYear->name,
-                    "session_year_id" => $request->session_year_id,
-                    "subject_id" => $report['subject_id'] ?? $request->subject_id,
-                    "student_id" => $report['student_id'],
-                    "points" => $report['points'],
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
-                    "review" => $report['review'] ?? null,
-                    "missing_cause" => $report['missing_cause'] ?? null
-                ];
-            }
-
-            $result = StudentReportCards::insert($array);
-
-            $allStudents = User::where('type', 'student')
-                ->whereHas('student', function ($query) use ($userID, $class_id) {
-                    $query->whereHas('class_section', function ($query) use ($userID, $class_id) {
-                        $query->where('class_id', $class_id);
-                    });
-                })->pluck('id')->toArray();
-
-            $publishedStudents = StudentQuarter::where('quarter_id', $request->quarter_id)
-                ->where('class_id',$class_id)
-                ->where('session_year_id', $request->session_year_id)
-                ->pluck('student_id')->toArray();
-            $unPublishedStudents = array_diff($allStudents, $publishedStudents);
-            $newStudentQuarter = array();
-
-            $notificationUsers =[];
-            $quarters = Quarters::where('id',$request->quarter_id)->first();
-
-            $classSubjectsSql = ClassSubject::where('class_id', $request->class_id);
-            $classSubjectsCount = $classSubjectsSql->count();
-            $classSubjects = $classSubjectsSql->pluck('subject_id')->toArray();
-
-            $missing_cause_count = 0;
-            foreach ($classSubjects as $classSubject){
-                $subjectNotEmptyReports = StudentReportCards::where('session_year_id',$request->session_year_id)
-                    ->where('quarter_id',$request->quarter_id)
-                    ->where('subject_id',$classSubject)
-                    ->where('class_id',$request->class_id)
-                    ->where('missing_cause',null)
-                    ->where('points',null)
-                    ->first();
-
-                if(!$subjectNotEmptyReports){
-                    $missing_cause_count = $missing_cause_count+1;
-                }
-            }
-
-            if($missing_cause_count == $classSubjectsCount){
-                $canPublish = true;
-            }
-            foreach ($unPublishedStudents as $unPublishedStudent) {
-                $existingReportCardCount = StudentReportCards::where('student_id', $unPublishedStudent)
-                    ->where('quarter_id', $request->quarter_id)
-                    ->where('session_year_id', $request->session_year_id)
-                    ->where('class_id', $class_id)
-                    ->count();
-
-                $missingReasonsCount = StudentReportCards::where('student_id', $unPublishedStudent)
-                    ->where('quarter_id', $request->quarter_id)
-                    ->where('missing_cause', '!=',null)
-                    ->where('session_year_id', $request->session_year_id)
-                    ->where('class_id', $class_id)
-                    ->count();
-
-
-                if ($existingReportCardCount == $classSubjectsCount &&  $canPublish) {
-
-                    $newStudentQuarter [] = [
-                        'id' => Utility::getUUID(),
-                        'quarter_id' => $request->quarter_id,
-                        'student_id' => $unPublishedStudent,
-                        'class_id' => $class_id,
-                        'session_year_id' => $request->session_year_id,
-                        'created_at' => Carbon::now(),
-                        'updated_at' => Carbon::now(),
-                        'status' => 'PUBLISHED',
-                    ];
-
-                    $student = Students::with('user')->where('user_id',$unPublishedStudent)->first();
-
-//                    $studentUser [] = User::where('id',$unPublishedStudent)
-//                        ->with('student.class_section.class.school')
-//                        ->with(['student' => function($query){
-//                            $query->withCount('student_subjects');
-//                        }])
-//                        ->first();
-
-                    $logOwnId = $student->primaryParentId();
-                    if($missingReasonsCount!=$classSubjectsCount){
-                        $notificationUsers[] = $logOwnId;
-                    }
-                    $classQuarter->status = 'PUBLISHED';
-                    $classQuarter->save();
-                }
-            }
-            if(sizeof($notificationUsers)>0){
-                $message = "A new report has been published for ".$quarters->name;
-
-                $notificationUsers = array_unique($notificationUsers);
-
-                $this->notificationSender->sendNotification(
-                    "Report Published",
-                    $message,
-                    $notificationUsers, "REPORT");
-                foreach ($notificationUsers as $notificationUser){
-                    $this->notificationSender->saveLogs($notificationUser,$user->id,$message,'REPORT','Report Published');
-                }
-                $notificationUsers = [];
-            }
-            StudentQuarter::insert($newStudentQuarter);
-
+            $published = $this->publishReadyStudents($classQuarter, $request->user(), true);
+            DB::commit();
             $response = array(
                 'error' => false,
-                'message' => trans('data_store_successfully'),
-                'report' => $result
+                'message' => "Report published successfully",
+                'data' => [
+                    'class_quarter_id' => $classQuarter->id,
+                    'status' => $classQuarter->status,
+                    'published_students' => sizeof($published),
+                ]
             );
-            DB::commit();
         } catch (\Exception $exception) {
             Log::error($exception);
             DB::rollBack();
             $response = array(
                 'error' => true,
                 'message' => trans('error_occurred'),
-                'report' => null
+                'data' => null
             );
         }
-
-        return response()->json(
-            $response
-        );
+        return response()->json($response);
     }
 
     public function deleteStudentReport(Request $request, $id){
@@ -676,19 +514,36 @@ class TeacherController extends Controller
             return Access::forbidden();
         }
         if($classQuarter){
-            $sessionYear = SessionYear::where('name', $classQuarter->session_year)->first();
+            // Older rows may only carry the session year name.
+            $sessionYearId = $classQuarter->session_year_id
+                ?? SessionYear::where('name', $classQuarter->session_year)->value('id');
+            if (!$sessionYearId) {
+                $response = array(
+                    'error' => true,
+                    'message' => "Failed to delete class quarter! Its session year could not be found.",
+                    'data' => null
+                );
+                return response()->json($response);
+            }
 
-            StudentQuarter::where('quarter_id',$classQuarter->quarter_id)
-                ->where('class_id',$classQuarter->class_id)
-                ->where('session_year_id',$sessionYear->id)
-                ->delete();
+            try {
+                $deleted = DB::transaction(function () use ($classQuarter, $sessionYearId, $id) {
+                    StudentQuarter::where('quarter_id',$classQuarter->quarter_id)
+                        ->where('class_id',$classQuarter->class_id)
+                        ->where('session_year_id',$sessionYearId)
+                        ->delete();
 
-            StudentReportCards::where('class_id', $classQuarter->class_id)
-                ->where('quarter_id', $classQuarter->quarter_id)
-                ->where('session_year_id', $sessionYear->id)
-                ->delete();
+                    StudentReportCards::where('class_id', $classQuarter->class_id)
+                        ->where('quarter_id', $classQuarter->quarter_id)
+                        ->where('session_year_id', $sessionYearId)
+                        ->delete();
 
-            $deleted = ClassQuarter::where('id',$id)->delete();
+                    return ClassQuarter::where('id',$id)->delete();
+                });
+            } catch (\Exception $exception) {
+                Log::error($exception);
+                $deleted = 0;
+            }
             if($deleted){
                 $response = array(
                     'error' => false,
@@ -712,14 +567,22 @@ class TeacherController extends Controller
         return response()->json($response);
     }
 
-    public function editStudentReport(Request $request)
+    /**
+     * Create and update share this: saves one row per student and subject, then publishes
+     * every student whose report is now complete.
+     */
+    private function saveStudentReports(Request $request)
     {
-        if ($request->class_id && !Access::principalOwnsClass($request->user(), $request->class_id)
-            && !Access::teacherOwnsClass($request->user(), $request->class_id)) {
+        $user = $request->user();
+        $class_id = $request->class_id;
+        // Class teachers and principals may save any subject; subject teachers only their own.
+        $ownsClass = $class_id && (Access::principalOwnsClass($user, $class_id) || Access::teacherOwnsClass($user, $class_id));
+        $taughtSubjectIds = $class_id && !$ownsClass ? $this->taughtSubjectIds($user, $class_id) : collect();
+        if ($class_id && !$ownsClass && $taughtSubjectIds->isEmpty()) {
             return Access::forbidden();
         }
         Log::info($request);
-        if (\App\Support\Access::role($request->user()) != 'teacher') {
+        if (\App\Support\Access::role($user) != 'teacher') {
             $response = array(
                 'error' => true,
                 'message' => trans('no_permission_message'),
@@ -741,9 +604,32 @@ class TeacherController extends Controller
             'reports.*.missing_cause' => 'nullable',
             'reports.*.grade' => 'nullable'
         ]);
-        $class_id = $request->class_id;
-        $userID = $request->user()->id;
+        if ($validator->fails()) {
+            $response = array(
+                'error' => true,
+                'message' => $validator->errors()->first()
+            );
+            return response()->json($response);
+        }
 
+        $sessionYear = SessionYear::where('id', $request->session_year_id)->first();
+        if (!$sessionYear) {
+            $response = array(
+                'error' => true,
+                'message' => "Invalid session year detected.",
+                'data' => null
+            );
+            return response()->json($response);
+        }
+        $quarter = Quarters::where('id', $request->quarter_id)->first();
+        if (!$quarter) {
+            $response = array(
+                'error' => true,
+                'message' => "Invalid quarter detected.",
+                'data' => null
+            );
+            return response()->json($response);
+        }
         $classSection = ClassSection::where('class_id', $class_id)->first();
         if (!$classSection) {
             $response = array(
@@ -753,25 +639,32 @@ class TeacherController extends Controller
             );
             return response()->json($response);
         }
-        $subjectIds = collect($request->reports ?? [])
+
+        $subjectIds = collect($request->reports)
             ->map(fn ($report) => $report['subject_id'] ?? $request->subject_id)
             ->push($request->subject_id)->filter()->unique()->values();
-        $isSubject = $subjectIds->isNotEmpty()
-            && Subject::whereIn('id', $subjectIds)->count() === $subjectIds->count();
-        if (!$isSubject) {
+        if ($subjectIds->isEmpty() || $subjectIds->diff($this->classSubjectIds($class_id))->isNotEmpty()) {
             $response = array(
                 'error' => true,
-                'message' => "Invalid subject detected.",
+                'message' => "Invalid subject detected. Every subject must be assigned to this class.",
+                'data' => null
+            );
+            return response()->json($response);
+        }
+        if (!$ownsClass && $subjectIds->diff($taughtSubjectIds)->isNotEmpty()) {
+            $response = array(
+                'error' => true,
+                'message' => "You can only save marks for the subjects you teach in this class.",
                 'data' => null
             );
             return response()->json($response);
         }
 
-        $studentIds = array_column($request->reports, 'student_id');
+        // The same student appears once per subject.
+        $studentIds = array_values(array_unique(array_column($request->reports, 'student_id')));
         $isClassStudents = User::where('type', 'student')->whereIn('id', $studentIds)
-            ->whereHas('student', function ($query) use ($userID, $class_id) {
-                $query->whereHas('class_section', function ($query) use ($userID, $class_id) {
-                    $query->where('class_teacher_id', $userID);
+            ->whereHas('student', function ($query) use ($class_id) {
+                $query->whereHas('class_section', function ($query) use ($class_id) {
                     $query->where('class_id', $class_id);
                 });
             })->count();
@@ -784,138 +677,61 @@ class TeacherController extends Controller
             return response()->json($response);
         }
 
-        $sessionYear = SessionYear::where('id', $request->session_year_id)->first();
-        if ($validator->fails()) {
-            $response = array(
-                'error' => true,
-                'message' => $validator->errors()->first()
-            );
-            return response()->json($response);
-        }
-        $array = array();
         try {
             DB::beginTransaction();
-            $canPublish = false;
-
-            foreach ($request->reports as $report) {
-               $deleted = StudentReportCards::where('class_id', $request->class_id)
-                    ->where('quarter_id', $request->quarter_id)
-                    ->where('subject_id', $report['subject_id'] ?? $request->subject_id)
-                    ->where('session_year_id', $request->session_year_id)
-                    ->where('student_id', $report['student_id'])
-                    ->delete();
-
-                $array [] = [
-                    "id" => Utility::getUUID(),
-                    "quarter_id" => $request->quarter_id,
-                    "class_id" => $request->class_id,
-                    "grade" => $report['grade'],
-                    "session_year" => $sessionYear->name,
-                    "session_year_id" => $request->session_year_id,
-                    "subject_id" => $report['subject_id'] ?? $request->subject_id,
-                    "student_id" => $report['student_id'],
-                    "points" => $report['points'],
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
-                    "review" => $report['review'] ?? null,
-                    "missing_cause" => $report['missing_cause'] ?? null
-                ];
-
-            }
-            $result = StudentReportCards::insert($array);
-
-            $allStudents = User::where('type', 'student')
-                ->whereHas('student', function ($query) use ($userID, $class_id) {
-                    $query->whereHas('class_section', function ($query) use ($userID, $class_id) {
-                        $query->where('class_id', $class_id);
-                    });
-                })->pluck('id')->toArray();
-
-            $publishedStudents = StudentQuarter::where('quarter_id', $request->quarter_id)
-                ->where('class_id',$class_id)
-                ->where('session_year_id', $request->session_year_id)
-                ->pluck('student_id')->toArray();
-
-            $unPublishedStudents = array_diff($allStudents, $publishedStudents);
-            $newStudentQuarter = array();
 
             $classQuarter = ClassQuarter::where('quarter_id',$request->quarter_id)
                 ->where('session_year_id', $sessionYear->id)
                 ->where('class_id', $class_id)
                 ->first();
-            $notificationUsers = [];
-            $quarters = Quarters::where('id',$request->quarter_id)->first();
-            $classSubjectsSql = ClassSubject::where('class_id', $request->class_id);
-            $classSubjectsCount = $classSubjectsSql->count();
-            $classSubjects = $classSubjectsSql->pluck('subject_id')->toArray();
+            if(!$classQuarter){
+                $classQuarter = new ClassQuarter();
+                $classQuarter->id = Utility::getUUID();
+                $classQuarter->quarter_id = $request->quarter_id;
+                $classQuarter->class_id = $class_id;
+                $classQuarter->status = "PENDING";
+                $classQuarter->session_year = $sessionYear->name;
+                $classQuarter->session_year_id = $sessionYear->id;
+                $classQuarter->save();
+                $classQuarter = $classQuarter->refresh();
+            }
 
-            $missing_cause_count = 0;
-            foreach ($classSubjects as $classSubject){
-                $subjectNotEmptyReports = StudentReportCards::where('session_year_id',$request->session_year_id)
-                    ->where('quarter_id',$request->quarter_id)
-                    ->where('subject_id',$classSubject)
-                    ->where('class_id',$request->class_id)
-                     ->where('missing_cause',null)
-                     ->where('points',null)
-                    ->first();
-                if(!$subjectNotEmptyReports){
-                    $missing_cause_count = $missing_cause_count+1;
+            $array = array();
+            foreach ($request->reports as $report) {
+                $subjectId = $report['subject_id'] ?? $request->subject_id;
+                StudentReportCards::where('class_id', $class_id)
+                    ->where('quarter_id', $request->quarter_id)
+                    ->where('subject_id', $subjectId)
+                    ->where('session_year_id', $sessionYear->id)
+                    ->where('student_id', $report['student_id'])
+                    ->delete();
+
+                // A blank row (no points and no missing cause) clears that subject instead of storing it.
+                $key = $report['student_id'] . '|' . $subjectId;
+                if (($report['points'] ?? null) === null && ($report['missing_cause'] ?? null) === null) {
+                    unset($array[$key]);
+                    continue;
                 }
+                $array[$key] = [
+                    "id" => Utility::getUUID(),
+                    "quarter_id" => $request->quarter_id,
+                    "class_id" => $class_id,
+                    "grade" => $report['grade'] ?? null,
+                    "session_year" => $sessionYear->name,
+                    "session_year_id" => $sessionYear->id,
+                    "subject_id" => $subjectId,
+                    "student_id" => $report['student_id'],
+                    "points" => $report['points'] ?? null,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                    "review" => $report['review'] ?? null,
+                    "missing_cause" => $report['missing_cause'] ?? null
+                ];
             }
 
-            if($missing_cause_count == $classSubjectsCount){
-                $canPublish = true;
-            }
+            $result = StudentReportCards::insert(array_values($array));
 
-            foreach ($unPublishedStudents as $unPublishedStudent) {
-                $existingReportCardCount = StudentReportCards::where('student_id', $unPublishedStudent)
-                    ->where('class_id',$class_id)
-                    ->where('session_year_id', $request->session_year_id)
-                    ->where('quarter_id', $request->quarter_id)->count();
-
-                $missingReasonsCount = StudentReportCards::where('student_id', $unPublishedStudent)
-                    ->where('class_id',$class_id)
-                    ->where('missing_cause', '!=',null)
-                    ->where('session_year_id', $request->session_year_id)
-                    ->where('quarter_id', $request->quarter_id)->count();
-
-
-                if ($existingReportCardCount == $classSubjectsCount && $canPublish) {
-                    $newStudentQuarter [] = [
-                        'id' => Utility::getUUID(),
-                        'quarter_id' => $request->quarter_id,
-                        'student_id' => $unPublishedStudent,
-                        'created_at' => Carbon::now(),
-                        'class_id' => $class_id,
-                        'session_year_id' => $request->session_year_id,
-                        'updated_at' => Carbon::now(),
-                        'status' => 'PUBLISHED',
-                    ];
-                    $student = Students::with('user')->where('user_id',$unPublishedStudent)->first();
-                    $message = "A new report has been published for ".$quarters->name;
-
-                    $logOwnId = $student->primaryParentId();
-                    if($missingReasonsCount!=$classSubjectsCount){
-                        $notificationUsers[] = $logOwnId;
-                    }
-                    $classQuarter->status = 'PUBLISHED';
-                    $classQuarter->save();
-                }
-            }
-            if(sizeof($notificationUsers)>0){
-                $message = "A new report has been published for ".$quarters->name;
-
-                $notificationUsers = array_unique($notificationUsers);
-                $this->notificationSender->sendNotification(
-                    "Report Published",
-                    $message,
-                    $notificationUsers, "REPORT");
-                foreach ($notificationUsers as $notificationUser){
-                    $this->notificationSender->saveLogs($notificationUser,$userID,$message,'REPORT','Report Published');
-                }
-                $notificationUsers = [];
-            }
-            StudentQuarter::insert($newStudentQuarter);
+            $this->publishReadyStudents($classQuarter, $user, false, $studentIds);
 
             $response = array(
                 'error' => false,
@@ -936,5 +752,121 @@ class TeacherController extends Controller
         return response()->json(
             $response
         );
+    }
+
+    /**
+     * Publishes the students of a class quarter whose report is ready and notifies their parents.
+     *
+     * A student is ready when every subject of the class has a row with points or a missing cause;
+     * with $manual, one such row is enough. Students published earlier stay published, and the
+     * parents of those in $updatedStudentIds are told the report changed. The class quarter turns
+     * PUBLISHED once every student is published (or on a manual publish) and never goes back.
+     *
+     * @return array the student user ids published by this call
+     */
+    private function publishReadyStudents(ClassQuarter $classQuarter, User $actor, bool $manual = false, array $updatedStudentIds = []): array
+    {
+        $class_id = $classQuarter->class_id;
+        $classSubjectIds = $this->classSubjectIds($class_id);
+        $classStudentIds = User::where('type', 'student')
+            ->whereHas('student', function ($query) use ($class_id) {
+                $query->whereHas('class_section', function ($query) use ($class_id) {
+                    $query->where('class_id', $class_id);
+                });
+            })->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $filledRows = StudentReportCards::where('class_id', $class_id)
+            ->where('quarter_id', $classQuarter->quarter_id)
+            ->where('session_year_id', $classQuarter->session_year_id)
+            ->where(function ($query) {
+                $query->whereNotNull('points')->orWhereNotNull('missing_cause');
+            })
+            ->get(['student_id', 'subject_id', 'points'])
+            ->groupBy('student_id');
+
+        $publishedStudents = StudentQuarter::where('quarter_id', $classQuarter->quarter_id)
+            ->where('class_id', $class_id)
+            ->where('session_year_id', $classQuarter->session_year_id)
+            ->pluck('student_id')->map(fn ($id) => (int) $id)->all();
+
+        $newStudentQuarter = [];
+        $newlyPublished = [];
+        $notifyStudents = [];
+        foreach (array_diff($classStudentIds, $publishedStudents) as $studentId) {
+            $rows = $filledRows->get($studentId, collect());
+            $ready = $manual
+                ? $rows->isNotEmpty()
+                : $classSubjectIds->isNotEmpty() && $classSubjectIds->diff($rows->pluck('subject_id'))->isEmpty();
+            if (!$ready) {
+                continue;
+            }
+            $newlyPublished[] = $studentId;
+            $newStudentQuarter[] = [
+                'id' => Utility::getUUID(),
+                'quarter_id' => $classQuarter->quarter_id,
+                'student_id' => $studentId,
+                'class_id' => $class_id,
+                'session_year_id' => $classQuarter->session_year_id,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+                'status' => 'PUBLISHED',
+            ];
+            // No notice when every filled subject is only a missing cause.
+            if ($rows->whereNotNull('points')->isNotEmpty()) {
+                $notifyStudents[] = $studentId;
+            }
+        }
+        StudentQuarter::insert($newStudentQuarter);
+
+        $allPublished = !empty($classStudentIds)
+            && empty(array_diff($classStudentIds, array_merge($publishedStudents, $newlyPublished)));
+        if ($classQuarter->status != 'PUBLISHED' && ($manual || $allPublished)) {
+            $classQuarter->status = 'PUBLISHED';
+            $classQuarter->save();
+        }
+
+        $quarterName = Quarters::where('id', $classQuarter->quarter_id)->value('name');
+        $this->notifyParents($notifyStudents, $actor, "Report Published",
+            "A new report has been published for " . $quarterName);
+        $this->notifyParents(array_intersect(array_map('intval', $updatedStudentIds), $publishedStudents), $actor,
+            "Report Updated", "The report for " . $quarterName . " has been updated");
+
+        return $newlyPublished;
+    }
+
+    private function notifyParents(array $studentIds, User $actor, string $title, string $message): void
+    {
+        if (empty($studentIds)) {
+            return;
+        }
+        $parentIds = Students::whereIn('user_id', $studentIds)->get()
+            ->map(fn ($student) => $student->primaryParentId())
+            ->filter()->unique()->values()->all();
+        if (empty($parentIds)) {
+            return;
+        }
+        $this->notificationSender->sendNotification($title, $message, $parentIds, "REPORT");
+        foreach ($parentIds as $parentId) {
+            $this->notificationSender->saveLogs($parentId, $actor->id, $message, 'REPORT', $title);
+        }
+    }
+
+    /** Subject ids assigned to the class (live class subjects of subjects that are not deleted). */
+    private function classSubjectIds($classId)
+    {
+        return ClassSubject::where('class_id', $classId)
+            ->whereNull('deleted_at')
+            ->whereHas('subject')
+            ->pluck('subject_id')->map(fn ($id) => (int) $id)->unique()->values();
+    }
+
+    /** Subject ids the user teaches in any section of the class. */
+    private function taughtSubjectIds(User $user, $classId)
+    {
+        return SubjectTeacher::where('teacher_id', $user->id)
+            ->whereHas('class_section', function ($query) use ($classId) {
+                $query->where('class_id', $classId);
+            })
+            ->pluck('subject_id')->map(fn ($id) => (int) $id)->unique()->values();
     }
 }
