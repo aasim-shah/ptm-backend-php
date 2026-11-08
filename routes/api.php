@@ -318,6 +318,7 @@ Route::group(['prefix' => 'teacher'], function () {
         Route::post('create/student-report', [\App\Http\Controllers\Api\v2\TeacherController::class,'addStudentReport'])->middleware('ptm.can:reports.manage');
         Route::delete('delete/student-report/{id}', [\App\Http\Controllers\Api\v2\TeacherController::class,'deleteStudentReport'])->middleware('ptm.can:reports.manage');
         Route::post('update/student-report', [\App\Http\Controllers\Api\v2\TeacherController::class,'editStudentReport'])->middleware('ptm.can:reports.manage');
+        Route::post('publish/student-report', [\App\Http\Controllers\Api\v2\TeacherController::class,'publishStudentReport'])->middleware('ptm.can:reports.manage');
 
 
         Route::get('fetch-student-class', [TeacherApiController::class, 'getStudentsListForClass']);
