@@ -5,7 +5,7 @@
 </x-ap.head>
 
 <section class="ap-panel">
-    <x-ap.toolbar :action="route('workspace.audit')" :context="$context" placeholder="Search by who did it (name or email)" :count="$entries->total()">
+    <x-ap.toolbar :action="route('workspace.audit')" :context="$context" placeholder="Search by person" :count="$entries->total()">
         <select name="category" aria-label="Type of activity"><option value="">All activity</option>@foreach($categories as $key => [$label]) <option value="{{ $key }}" @selected(request('category') === $key)>{{ $label }}</option>@endforeach</select>
         @if(count($context['schools']) > 1)<select name="school_id" aria-label="School"><option value="">All schools</option>@foreach($context['schools'] as $id => $name)<option value="{{ $id }}" @selected((string) request('school_id') === (string) $id)>{{ $name }}</option>@endforeach</select>@endif
         <input type="date" name="from" value="{{ request('from') }}" aria-label="From date" max="{{ now()->toDateString() }}">
