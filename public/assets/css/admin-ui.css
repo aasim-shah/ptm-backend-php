@@ -202,3 +202,21 @@ dialog.ap-dialog::backdrop { background:#0f1f3a66; backdrop-filter:blur(2px); }
     .ap-table th:nth-child(n+4):not(.ap-keep), .ap-table td:nth-child(n+4):not(.ap-keep) { display:none; }
 }
 @media print { .ap-toolbar, .ap-head-actions, .ap-pager, dialog { display:none!important; } }
+
+/* ---------- Icon tiles: always square, never stretched or squeezed by flex ---------- */
+.ws-body .ws-connection-icon { flex:0 0 52px; width:52px; height:52px; margin:0; border-radius:14px; font-size:22px; align-self:center; box-shadow:0 6px 16px #176ce02e; }
+.ws-body .ws-tinted > .ws-connection-icon { margin-bottom:16px; align-self:auto; }
+.ws-body .ws-stats .ws-stat > .ws-stat-icon { flex:0 0 44px; width:44px; height:44px; border-radius:12px; font-size:19px; }
+
+/* ---------- Video Communication Center card: intro and actions on top, stats below ---------- */
+.ws-body .ws-video-center { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"intro actions" "stats stats"; gap:20px 24px; padding:24px 26px; align-items:center; }
+.ws-body .ws-video-center__intro { grid-area:intro; gap:16px; min-width:0; }
+.ws-body .ws-video-center__actions { grid-area:actions; justify-content:flex-end; }
+.ws-body .ws-video-center__stats { grid-area:stats; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.ws-body .ws-video-center__intro h2 { font-size:17px; line-height:1.3; letter-spacing:-.2px; }
+.ws-body .ws-video-center__intro p { margin-top:5px; font-size:13px; line-height:1.55; color:#5d6f8a; max-width:620px; }
+.ws-body .ws-video-center__stats div { padding:14px 16px; }
+.ws-body .ws-video-center__stats dt { font-size:11px; }
+.ws-body .ws-video-center__stats dd { font-size:22px; white-space:nowrap; }
+@media(max-width:1100px) { .ws-body .ws-video-center { grid-template-columns:minmax(0,1fr); grid-template-areas:"intro" "stats" "actions"; } .ws-body .ws-video-center__actions { justify-content:flex-start; } }
+@media(max-width:600px) { .ws-body .ws-video-center__stats { grid-template-columns:minmax(0,1fr); } }
